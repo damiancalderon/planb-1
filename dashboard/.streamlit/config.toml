@@ -1,0 +1,7 @@
+[theme]
+base="dark"
+primaryColor="#1E3A8A"            # azul principal
+backgroundColor="#0B1220"         # fondo
+secondaryBackgroundColor="#111827"# paneles/sidebar
+textColor="#E5E7EB"               # texto claro
+font="sans serif"
