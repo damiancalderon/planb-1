@@ -7,7 +7,6 @@ def render():
         .team-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;margin-top:1rem}
         .card{background:var(--background-color,#ffffff);border:1px solid rgba(0,0,0,.08);border-radius:16px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.04);text-align:center}
         .card img{width:120px;height:120px;object-fit:cover;border-radius:999px;display:block;margin:0 auto 10px;border:3px solid rgba(0,0,0,.06)}
-        .role{font-size:.85rem;color:#6b7280;margin-top:2px}
         .quote{font-size:.95rem;color:#374151;line-height:1.35;margin-top:8px}
         .section{background:rgba(0,0,0,.02);border:1px solid rgba(0,0,0,.06);border-radius:16px;padding:16px}
         .kicker{letter-spacing:.08em;text-transform:uppercase;font-weight:600;font-size:.8rem;color:#6b7280;margin-bottom:6px}
@@ -21,33 +20,28 @@ def render():
     # Team data (cambia nombres/fotos si quieres). Las imágenes usan placeholders públicos.
     team = [
         {
-            "name": "A. Analyst",
+            "name": "Luis Manuel Gallegos Pérez",
             "img": "https://placehold.co/400x400/png?text=A",
-            "role": "Data Scientist",
             "quote": "Predictive models turn scattered incidents into early-warning signals."
         },
         {
-            "name": "B. Builder",
+            "name": "Damian Calderon Capallera",
             "img": "https://placehold.co/400x400/png?text=B",
-            "role": "ML Engineer",
             "quote": "Forecasting crime risk helps allocate resources before spikes happen."
         },
         {
-            "name": "C. Cartographer",
+            "name": "Daniela Martínez Xolalpa",
             "img": "https://placehold.co/400x400/png?text=C",
-            "role": "Geo Analyst",
             "quote": "Space-time patterns reveal where prevention can be most effective."
         },
         {
-            "name": "D. Detective",
+            "name": "José de Jesús Rodríguez Rocha",
             "img": "https://placehold.co/400x400/png?text=D",
-            "role": "Research Lead",
             "quote": "From noise to narrative: modeling explains the ‘why’, not just the ‘what’."
         },
         {
-            "name": "E. Ethicist",
+            "name": "Fernando Vázquez Rivera",
             "img": "https://placehold.co/400x400/png?text=E",
-            "role": "Policy & Ethics",
             "quote": "Responsible prediction means insight that informs action—never bias."
         },
     ]
@@ -61,7 +55,6 @@ def render():
             <div class="card">
                 <img src="{m['img']}" alt="{m['name']}">
                 <div style="font-weight:700">{m['name']}</div>
-                <div class="role">{m['role']}</div>
                 <div class="quote">“{m['quote']}”</div>
             </div>
             """,
