@@ -96,3 +96,5 @@ target/
 # /data/dashboard/carpetasFGJ_acumulado_2025_01.csv
 dashboard/cleaned_crime_data.csv
 carpetasFGJ_*.csv
+carpetasFGJ_*.csv
+dashboard/*.csv
