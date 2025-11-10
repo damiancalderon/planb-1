@@ -243,3 +243,66 @@ def get_filtered_map_data(crime_types, hour_range, classification):
     query += " LIMIT 50000"
 
     return run_query(query, params)
+
+# --- Funciones para EDA.py ---
+
+def get_category_violence_heatmap():
+    """
+    Obtiene la cuenta de delitos por categoría y tipo de violencia.
+    (Para el heatmap en EDA.py)
+    """
+    query = """
+    SELECT
+        crime_classification,
+        violence_type,
+        COUNT(*) AS total
+    FROM
+        crimes
+    WHERE
+        violence_type IS NOT NULL AND crime_classification IS NOT NULL
+    GROUP BY
+        crime_classification, violence_type
+    """
+    return run_query(query)
+
+def get_yearly_violence_trend():
+    """
+    Obtiene la tendencia anual de crímenes violentos vs no violentos.
+    (Para el gráfico de línea en EDA.py)
+    """
+    query = """
+    SELECT
+        anio_hecho,
+        violence_type,
+        COUNT(*) AS total
+    FROM
+        crimes
+    WHERE
+        violence_type IS NOT NULL
+    GROUP BY
+        anio_hecho, violence_type
+    ORDER BY
+        anio_hecho ASC
+    """
+    return run_query(query)
+
+def get_alcaldia_distribution(limit=10):
+    """
+    Obtiene el top 10 de alcaldías por número de crímenes.
+    (Para el gráfico de barras en EDA.py)
+    """
+    query = f"""
+    SELECT
+        alcaldia_hecho,
+        COUNT(*) AS total
+    FROM
+        crimes
+    WHERE
+        alcaldia_hecho IS NOT NULL
+    GROUP BY
+        alcaldia_hecho
+    ORDER BY
+        total DESC
+    LIMIT {limit}
+    """
+    return run_query(query)
