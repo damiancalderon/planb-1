@@ -24,9 +24,8 @@ def render():
     # Team data (cambia nombres/fotos si quieres). Las imágenes usan placeholders públicos.
     team = [
         {
-<<<<<<< HEAD
             "name": "A. Analyst",
-            "img": "https://placehold.co/400x400/png?text=A",
+            "img": "",
             "role": "Data Scientist",
             "quote": "Predictive models turn scattered incidents into early-warning signals."
         },
@@ -52,30 +51,28 @@ def render():
             "name": "E. Ethicist",
             "img": "https://placehold.co/400x400/png?text=E",
             "role": "Policy & Ethics",
-=======
             "name": "Luis Manuel Gallegos Pérez",
             "img": "https://placehold.co/400x400/png?text=A",
             "quote": "Predictive models turn scattered incidents into early-warning signals."
         },
         {
             "name": "Damian Calderon Capallera",
-            "img": "https://placehold.co/400x400/png?text=B",
+            "img": "dashboard\damian.png",
             "quote": "Forecasting crime risk helps allocate resources before spikes happen."
         },
         {
             "name": "Daniela Martínez Xolalpa",
-            "img": "https://placehold.co/400x400/png?text=C",
+            "img": "dashboard\dani.png",
             "quote": "Space-time patterns reveal where prevention can be most effective."
         },
         {
             "name": "José de Jesús Rodríguez Rocha",
-            "img": "https://placehold.co/400x400/png?text=D",
+            "img": "dashboard\chuy.png",
             "quote": "From noise to narrative: modeling explains the ‘why’, not just the ‘what’."
         },
         {
             "name": "Fernando Vázquez Rivera",
-            "img": "https://placehold.co/400x400/png?text=E",
->>>>>>> 57695c1260b2c477ebf3d336435ea8dea6a39431
+            "img": "dashboard\fercho.png",
             "quote": "Responsible prediction means insight that informs action—never bias."
         },
     ]
