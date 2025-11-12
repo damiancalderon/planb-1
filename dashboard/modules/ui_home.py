@@ -102,7 +102,7 @@ def render():
         st.subheader("Sabías que...? 🇲🇽")
         
         # Ruta de la imagen local
-        img_path_sabiasque = Path("/Users/fernandovazquezrivera/OPERACIONCONTINGENCIA/planb/dashboard/Captura de pantalla 2025-11-11 a la(s) 7.12.55 p.m..png")
+        img_path_sabiasque = Path("/Users/damcalde/RETO/planb/dashboard/Captura de pantalla 2025-11-11 a la(s) 7.12.55 p.m..png")
         
         # Verificar si la imagen existe antes de cargarla
         if img_path_sabiasque.exists():
@@ -125,7 +125,7 @@ def render():
         )
         
         # Ruta de la imagen local
-        img_path = Path("/Users/fernandovazquezrivera/OPERACIONCONTINGENCIA/planb/dashboard/CDMX IMAGEN INICIAL.jpg")
+        img_path = Path("/Users/damcalde/RETO/planb/dashboard/CDMX IMAGEN INICIAL.jpg")
         
         # Verificar si la imagen existe antes de cargarla
         if img_path.exists():
