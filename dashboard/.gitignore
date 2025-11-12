@@ -1,1 +1,5 @@
+
+# Ignorar archivos grandes
+dashboard/violence_rf_optimizado_v3.joblib
+dashboard/crime_forecaster.pkl
 carpetasFGJ_*.csv
