@@ -1,4 +1,8 @@
 import streamlit as st
+
+def render():
+    st.title("📊 Analysis")
+    st.info("Espacio para KPIs/insights. (Dime qué métricas quieres y lo armamos, ca.)")
 import plotly.express as px
 import plotly.graph_objects as go
 import database # Importamos nuestro módulo

@@ -1,5 +1,7 @@
 import streamlit as st
+import os
 from pathlib import Path
+
 
 def render():
     st.markdown("""
@@ -58,29 +60,29 @@ def render():
     """, unsafe_allow_html=True)
 
     # Header
-    st.title("Our team")
-    st.write("Get to know the people behind our team, and discover our mission and the goals that guide everything we do")
+    st.title("Nuestro Equipo")
+    st.write("Conoce a las personas detrás de nuestro equipo y descubre nuestra misión y los objetivos que guían todo lo que hacemos")
 
-    # Team data (cambia nombres/fotos si quieres). Usaremos la clase Path para manejar las rutas de las imágenes.
+    # Team data
     team = [
         {
             "name": "Damian Calderon Capallera",
-            "img": Path("/Users/damcalde/RETO/planb/dashboard/damian.png"),  # Ruta local con Path
+            "img": Path("/Users/dmart/OneDrive/Imágenes/Documentos/reto/planb/dashboard/damian.png"),
             "quote": "Forecasting crime risk helps allocate resources before spikes happen."
         },
         {
             "name": "Daniela Martínez Xolalpa",
-            "img": Path("/Users/damcalde/RETO/planb/dashboard/dani.png"),  # Ruta local con Path
+            "img": Path("/Users/dmart/OneDrive/Imágenes/Documentos/reto/planb/dashboard/dani.png"),
             "quote": "Space-time patterns reveal where prevention can be most effective."
         },
         {
             "name": "José de Jesús Rodríguez Rocha",
-            "img": Path("/Users/damcalde/RETO/planb/dashboard/chuy.png"),  # Ruta local con Path
+            "img": Path("/Users/dmart/OneDrive/Imágenes/Documentos/reto/planb/dashboard/chuy.png"),
             "quote": "From noise to narrative: modeling explains the ‘why’, not just the ‘what’."
         },
         {
             "name": "Fernando Vázquez Rivera",
-            "img": Path("/Users/damcalde/RETO/planb/dashboard/fercho.png"),  # Ruta local con Path
+            "img": Path("/Users/dmart/OneDrive/Imágenes/Documentos/reto/planb/dashboard/fercho.png"),
             "quote": "Responsible prediction means insight that informs action—never bias."
         },
         {
@@ -97,48 +99,29 @@ def render():
 
     # Mostrar información del equipo (Parte superior: 3 columnas)
     st.markdown('<div class="kicker">Team</div>', unsafe_allow_html=True)
-    st.markdown('<div class="team-grid">', unsafe_allow_html=True)
-    for m in team[:3]:  # Mostramos solo los 3 primeros para la fila superior
-        st.markdown(f"""
-            <div class="card">
-                {st.image(m['img'], caption=m['name'], use_container_width=True)}  <!-- Imagen usando st.image -->
-                <div style="font-weight:700">{m['name']}</div>
-                <div class="quote">“{m['quote']}”</div>
-            </div>
-        """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Mostrar información del equipo (Parte inferior: 2 columnas)
-    st.markdown('<div class="team-grid-bottom">', unsafe_allow_html=True)
-    for m in team[3:]:  # Mostramos los siguientes 3 (parte inferior)
-        st.markdown(f"""
-            <div class="card">
-                {st.image(m['img'], caption=m['name'], use_container_width=True)}  <!-- Imagen usando st.image -->
-                <div style="font-weight:700">{m['name']}</div>
-                <div class="quote">“{m['quote']}”</div>
-            </div>
-        """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    cols = st.columns(len(team))
+    for idx, m in enumerate(team):
+        with cols[idx]:
+            if os.path.exists(m["img"]):
+                st.image(m["img"], width=120)
+            else:
+                st.warning(f"Image not found: {m['img']}")
+            st.markdown(f"**{m['name']}**", unsafe_allow_html=True)
+            st.markdown(f'<div class="quote">“{m["quote"]}”</div>', unsafe_allow_html=True)
 
     st.write("")  # spacing
 
     # Mission
-    st.markdown('<div class="kicker">Our mission</div>', unsafe_allow_html=True)
+    st.markdown('<div class="kicker">Nuestra misión</div>', unsafe_allow_html=True)
     st.markdown(
         """
         <div class="section">
-        <p><strong>Our mission is to transform raw data into knowledge that drives meaningful change.</strong>
-        In a city where hundreds of crimes are reported every day, understanding the when, where, and why
-        behind each incident is essential. We believe that data, when analyzed with purpose and precision,
-        can illuminate the patterns that shape urban safety and help guide smarter decisions.</p>
+        <p><strong>Nuestra misión es transformar los datos en conocimiento que impulse un cambio significativo.</strong>
+        En una ciudad donde se reportan cientos de delitos cada día, comprender el cuándo, dónde y por qué de cada incidente es esencial. Creemos que los datos, cuando se analizan con propósito y precisión, pueden iluminar los patrones que configuran la seguridad urbana y ayudar a guiar decisiones más inteligentes.</p>
 
-        <p>Through the use of data analytics, visualization, and social insight, our goal is to uncover the stories
-        hidden within the numbers — revealing how daily routines, social behavior, and city structure influence crime
-        dynamics. By doing so, we aim to support evidence-based prevention strategies that make our communities safer
-        and more resilient.</p>
+        <p>A través del uso de análisis de datos, visualización e información social, nuestro objetivo es descubrir las historias ocultas dentro de los números, revelando cómo las rutinas diarias, el comportamiento social y la estructura de la ciudad influyen en la dinámica del crimen. Al hacerlo, buscamos apoyar estrategias de prevención basadas en evidencia que hagan nuestras comunidades más seguras y resilientes.</p>
 
-        <p>We stand by the idea that information alone is not enough — it must lead to understanding, and understanding
-        must lead to action. That is the path we follow: moving from incidents to insights.</p>
+        <p>Sostenemos la idea de que la información por sí sola no es suficiente: debe conducir a la comprensión, y la comprensión debe conducir a la acción. Ese es el camino que seguimos: pasar de los incidentes a las ideas.</p>
         </div>
         """,
         unsafe_allow_html=True
@@ -147,13 +130,12 @@ def render():
     st.write("")  # spacing
 
     # Goals
-    st.markdown('<div class="kicker">Our goals</div>', unsafe_allow_html=True)
+    st.markdown('<div class="kicker">Nuestros objetivos</div>', unsafe_allow_html=True)
     st.markdown(
         """
         <div class="section">
-        <p><strong>Our goal is to turn complex crime data into clear, actionable insights that help understand and prevent urban insecurity.</strong>
-        We aim to combine technology, analytical thinking, and social awareness to identify meaningful trends and support
-        decision-makers, researchers, and communities in developing effective strategies for safety and prevention.</p>
+        <p><strong>Nuestro objetivo es transformar los datos complejos sobre delitos en información clara y accionable que ayude a comprender y prevenir la inseguridad urbana.</strong>
+         Aspiramos a combinar tecnología, pensamiento analítico y conciencia social para identificar tendencias significativas y apoyar a los responsables de la toma de decisiones, investigadores y comunidades en el desarrollo de estrategias efectivas para la seguridad y la prevención.</p>
         </div>
         """,
         unsafe_allow_html=True

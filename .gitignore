@@ -95,8 +95,11 @@ target/
 # exclude data from source control by default
 # /data/dashboard/carpetasFGJ_acumulado_2025_01.csv
 dashboard/cleaned_crime_data.csv
+<<<<<<< HEAD
+=======
 carpetasFGJ_*.csv
 carpetasFGJ_*.csv
 dashboard/*.csv
 dashboard/*.csv
 carpetasFGJ_*.csv
+>>>>>>> 57695c1260b2c477ebf3d336435ea8dea6a39431
