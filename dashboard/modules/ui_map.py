@@ -239,7 +239,6 @@ def render():
         map_style='mapbox://styles/mapbox/dark-v9',
     ))
 
-
 # Llama a la función render() si este módulo se ejecuta directamente (opcional)
 if __name__ == '__main__':
     st.set_page_config(page_title="Mapa Interactivo", page_icon="🗺️", layout="wide")
