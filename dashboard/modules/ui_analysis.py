@@ -1,10 +1,8 @@
 import streamlit as st
-<<<<<<< HEAD
 
 def render():
     st.title("📊 Analysis")
     st.info("Espacio para KPIs/insights. (Dime qué métricas quieres y lo armamos, ca.)")
-=======
 import plotly.express as px
 import plotly.graph_objects as go
 import database # Importamos nuestro módulo
@@ -172,4 +170,3 @@ def render():
                     )
         else:
             st.warning("No se pudieron cargar métricas de violencia.")
->>>>>>> 57695c1260b2c477ebf3d336435ea8dea6a39431
