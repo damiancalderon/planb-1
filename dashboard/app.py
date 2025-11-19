@@ -8,7 +8,7 @@ from modules import ui_home, ui_analysis, ui_info, ui_ourteam, ui_alerts, ui_map
 # --- Configuración de página (debe ir antes de cualquier render) ---
 st.set_page_config(
     page_title="CDMX Crime Intelligence Platform",
-    page_icon="🗺️",
+    page_icon="🗺",
     layout="wide",
     initial_sidebar_state="collapsed" # Mantenemos colapsado
 )
@@ -31,6 +31,24 @@ def handle_login(user_type):
 
 # --- Función para renderizar la página de selección de usuario ---
 def render_selection_page():
+    st.markdown(
+        """
+        <style>
+        body {
+            background-color: #E0F2F7;
+        }
+        .top-left-logo {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 400px; /* Adjust size as needed */
+            z-index: 1000;
+        }
+        </style>
+        <img src="https://upload.wikimedia.org/wikipedia/commons/2/21/Thales_Logo.svg" class="top-left-logo" alt="Thales Logo">
+        """,
+        unsafe_allow_html=True
+    )
     # Usamos un contenedor principal para centrar el contenido y evitar otros elementos
     col1, col2, col3 = st.columns([1, 2, 1])
 
@@ -41,12 +59,14 @@ def render_selection_page():
             .stSelectbox label {
                 font-size: 1.25rem;
                 font-weight: 600;
+                display: block; /* To apply text-align */
             }
             .stButton>button {
                 width: 100%;
                 font-size: 1.1rem;
                 padding: 0.5rem;
                 margin-top: 1rem;
+                text-align: center;
             }
             .title-selection {
                 font-size: 2rem;
@@ -54,11 +74,20 @@ def render_selection_page():
                 text-align: center;
                 margin-bottom: 2rem;
             }
+            .centered-content-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                width: 100%;
+                margin-top: 15vh; /* Push content further down */
+            }
             </style>
             """,
             unsafe_allow_html=True
         )
 
+        st.markdown("<div class='centered-content-container'>", unsafe_allow_html=True)
         st.markdown("<div class='title-selection'>Selecciona tu usuario para continuar</div>", unsafe_allow_html=True)
 
         user = st.selectbox(
@@ -86,6 +115,7 @@ def render_selection_page():
             if st.button("Acceder como Thales"):
                 # Llama a la función de manejo de login directamente
                 handle_login("Thales")
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # --- Función principal de la aplicación ---
 def render_main_dashboard():
@@ -95,10 +125,10 @@ def render_main_dashboard():
     # Seleccionar las páginas disponibles según el usuario
     if st.session_state.user == "Policía":
         available_pages = PAGES_POLICIA
-        st.sidebar.markdown(f"**Usuario:** `Policía`")
+        st.sidebar.markdown(f"Usuario: Policía")
     else:
         available_pages = PAGES_THALES
-        st.sidebar.markdown(f"**Usuario:** `Thales`")
+        st.sidebar.markdown(f"Usuario: Thales")
 
     # Muestra las opciones de navegación
     page = st.sidebar.radio(
@@ -137,9 +167,9 @@ def render_main_dashboard():
             st.warning(f"Error de navegación: No se encontró la página '{page}'.")
 
     except NameError as e:
-        st.error(f"⚠️ Error de módulo: {e}. Asegúrate de que todos los módulos (`ui_home`, `ui_analysis`, etc.) estén disponibles en tu entorno.")
+        st.error(f"⚠ Error de módulo: {e}. Asegúrate de que todos los módulos (ui_home, ui_analysis, etc.) estén disponibles en tu entorno.")
     except Exception as e:
-        st.error(f"⚠️ Ocurrió un error al renderizar la página: {e}")
+        st.error(f"⚠ Ocurrió un error al renderizar la página: {e}")
         st.info("Verifica que las funciones de renderizado dentro de tus módulos no contengan errores.")
 
 # --- Lógica de arranque (Control de flujo) ---

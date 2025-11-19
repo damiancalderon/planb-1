@@ -178,3 +178,6 @@ wcwidth==0.2.14
 xyzservices==2025.4.0
 yarg==0.1.10
 tensorflow>=2.14.0
+xgboost
+duckdb
+statsmodel
