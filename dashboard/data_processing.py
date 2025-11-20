@@ -12,16 +12,33 @@ import time
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
 import ssl, certifi
+from pathlib import Path
 
 @st.cache_data
 def load_data():
+  base_dir = Path(__file__).resolve().parent
+  candidate_dirs = [base_dir, base_dir / "data"]
+
+  def resolve_path(filename):
+    for directory in candidate_dirs:
+      file_path = directory / filename
+      if file_path.exists():
+        return file_path
+    raise FileNotFoundError(
+      f"Could not locate '{filename}' in {[str(path) for path in candidate_dirs]}"
+    )
+
   try:
-    df = pd.read_csv('/Users/damcalde/dashboard/data/cleaned_crime_data.csv')
-    boroughs_coordinates = '/Users/damcalde/dashboard/data/alcaldias.geojson'
-    metro_coordinates = '/Users/damcalde/dashboard/data/alcaldias.geojson'
-    print("Data loaded successfully.")
-  except FileNotFoundError:
-    print(f"Error: One or more files were not found.")
+    data_path = resolve_path('cleaned_crime_data.csv')
+    boroughs_path = resolve_path('alcaldias.geojson')
+    metro_path = resolve_path('alcaldias.geojson')
+
+    df = pd.read_csv(data_path)
+    boroughs_coordinates = str(boroughs_path)
+    metro_coordinates = str(metro_path)
+    print(f"Data loaded successfully from '{data_path}'.")
+  except FileNotFoundError as e:
+    print(f"Error: {e}")
     df = None
     boroughs_coordinates = None
     metro_coordinates = None
