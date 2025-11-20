@@ -427,7 +427,6 @@ def render():
 
     # Créditos finales
     st.caption("This platform combines machine learning, geospatial analysis, and open data to support data-driven safety strategies.")
-    st.caption("Photo: “Mexico City Reforma skyline” — Jonathan Salvador — CC BY-SA 4.0 — via Wikimedia Commons.")
 
 
 if __name__ == "__main__":

@@ -1,19 +1,101 @@
 import json
 from datetime import time
 from pathlib import Path
+from typing import Optional
 
 import branca.colormap as cm
 import folium
+import numpy as np
 import pandas as pd
 import streamlit as st
-from folium.plugins import HeatMap, MarkerCluster, Fullscreen, MeasureControl
+from folium.elements import MacroElement
+from folium.plugins import (
+    HeatMap,
+    HeatMapWithTime,
+    MarkerCluster,
+    Fullscreen,
+    MeasureControl,
+    TimestampedGeoJson,
+)
+from folium.utilities import none_max, none_min
 from geopy.exc import GeocoderServiceError, GeocoderTimedOut
+from jinja2 import Template
 from streamlit_folium import st_folium
 
 import data_processing as dp
 
 BASE_PATH = Path(__file__).resolve().parent
 ALCALDIAS_GEOJSON_PATH = BASE_PATH / "alcaldias.geojson"
+TIMELINE_POINT_LIMIT = 2500
+
+
+_TIMELINE_FREQ_OPTIONS = {
+    "Hourly": {"freq": "H", "label_fmt": "%Y-%m-%d %H:%M", "period": "PT1H"},
+    "Daily": {"freq": "D", "label_fmt": "%Y-%m-%d", "period": "P1D"},
+    "Weekly": {"freq": "W", "label_fmt": "Semana %W - %Y", "period": "P1W"},
+    "Monthly": {"freq": "M", "label_fmt": "%b %Y", "period": "P1M"},
+}
+
+
+class LegendTickFormatter(MacroElement):
+    """Format legend tick labels to include a 'k' suffix for thousands."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._name = "LegendTickFormatter"
+        self._template = Template(
+            """
+            {% macro script(this, kwargs) %}
+            function formatLegendTicks{{ this.get_name() }}(attempt) {
+                attempt = attempt || 0;
+                const legendSvg = document.getElementById('legend');
+                if (!legendSvg) {
+                    if (attempt > 10) {
+                        return;
+                    }
+                    setTimeout(function () {
+                        formatLegendTicks{{ this.get_name() }}(attempt + 1);
+                    }, 200);
+                    return;
+                }
+                legendSvg.querySelectorAll('.tick text').forEach(function (label) {
+                    const numericValue = parseFloat(label.textContent.replace(/,/g, ''));
+                    if (Number.isNaN(numericValue)) {
+                        return;
+                    }
+                    if (Math.abs(numericValue) >= 1000) {
+                        const scaled = numericValue / 1000;
+                        const decimals = Number.isInteger(scaled) ? 0 : 1;
+                        label.textContent = scaled.toFixed(decimals) + 'k';
+                    } else if (!Number.isInteger(numericValue)) {
+                        label.textContent = numericValue.toFixed(1);
+                    } else {
+                        label.textContent = numericValue.toString();
+                    }
+                });
+            }
+            formatLegendTicks{{ this.get_name() }}(0);
+            {% endmacro %}
+            """
+        )
+
+
+class TimelineHeatMap(HeatMapWithTime):
+    """Patched HeatMapWithTime that can compute bounds on nested frame data."""
+
+    def _get_self_bounds(self):
+        bounds = [[None, None], [None, None]]
+        for frame in self.data or []:
+            for point in frame or []:
+                try:
+                    lat, lon = float(point[0]), float(point[1])
+                except (TypeError, ValueError, IndexError):
+                    continue
+                bounds = [
+                    [none_min(bounds[0][0], lat), none_min(bounds[0][1], lon)],
+                    [none_max(bounds[1][0], lat), none_max(bounds[1][1], lon)],
+                ]
+        return bounds
 
 
 def _init_session_state() -> None:
@@ -24,6 +106,81 @@ def _init_session_state() -> None:
         st.session_state.last_clicked_address = None
     if 'poi_results' not in st.session_state:
         st.session_state.poi_results = {}
+
+
+def _prepare_timelapse_payload(df: pd.DataFrame, freq_key: str, max_frames: int):
+    """Build HeatMapWithTime payload and labels respecting a frame budget."""
+    freq_meta = _TIMELINE_FREQ_OPTIONS[freq_key]
+    freq = freq_meta["freq"]
+    truncated = False
+
+    df = df.copy()
+    df['time_bin'] = df['datetime'].dt.floor(freq)
+    df.dropna(subset=['time_bin'], inplace=True)
+    if df.empty:
+        return [], [], pd.DataFrame(), truncated
+
+    unique_bins = sorted(df['time_bin'].unique())
+    if not unique_bins:
+        return [], [], pd.DataFrame(), truncated
+
+    if len(unique_bins) > max_frames:
+        truncated = True
+        idx = np.linspace(0, len(unique_bins) - 1, max_frames, dtype=int)
+        idx = sorted(set(idx))
+        selected_bins = [unique_bins[i] for i in idx]
+    else:
+        selected_bins = unique_bins
+
+    grouped = df.groupby('time_bin')
+    heatmap_frames = []
+    labels = []
+    for bin_value in selected_bins:
+        slice_df = grouped.get_group(bin_value)
+        heatmap_frames.append(slice_df[['latitud', 'longitud']].values.tolist())
+        labels.append(bin_value.strftime(freq_meta['label_fmt']))
+
+    sliced_df = df[df['time_bin'].isin(selected_bins)].copy()
+    return heatmap_frames, labels, sliced_df, truncated
+
+
+def _build_timestamped_geojson(df: pd.DataFrame, max_points: int = TIMELINE_POINT_LIMIT):
+    """Convert filtered crimes to a TimestampedGeoJson feature collection."""
+    if df.empty:
+        return None
+
+    limited_df = df.sort_values('datetime').head(max_points)
+    features = []
+    for _, row in limited_df.iterrows():
+        popup = (
+            f"<b>Delito:</b> {row.get('delito_N', 'N/D')}<br>"
+            f"<b>Alcaldía:</b> {row.get('alcaldia_hecho_N', 'N/D')}<br>"
+            f"<b>Fecha:</b> {row['datetime'].strftime('%Y-%m-%d %H:%M')}"
+        )
+        features.append({
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [row['longitud'], row['latitud']],
+            },
+            "properties": {
+                "time": row['datetime'].isoformat(),
+                "popup": popup,
+                "icon": "circle",
+                "iconstyle": {
+                    "fillColor": "#ff5722",
+                    "fillOpacity": 0.7,
+                    "stroke": "true",
+                    "radius": 6,
+                    "color": "#ff9800",
+                },
+            },
+        })
+
+    if not features:
+        return None
+
+    return {"type": "FeatureCollection", "features": features}
 
 
 @st.cache_data
@@ -73,7 +230,7 @@ def load_geojson(geojson_file):
         return None
 
 
-def render_interactive_map(embed: bool = False):
+def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame] = None):
     """Renderiza el mapa histórico con controles avanzados y filtros dinámicos."""
     _init_session_state()
 
@@ -88,7 +245,7 @@ def render_interactive_map(embed: bool = False):
             """
         )
 
-    df_crime = load_and_clean_raw_data()
+    df_crime = df_crime if df_crime is not None else load_and_clean_raw_data()
     alcaldias_geojson = load_geojson(ALCALDIAS_GEOJSON_PATH)
 
     st.sidebar.header("⚙️ Map Filters & Controls")
@@ -153,7 +310,31 @@ def render_interactive_map(embed: bool = False):
     with st.sidebar.expander("Toggle Map Layers", expanded=True):
         show_alcaldias = st.toggle("Show Alcaldías Boundaries", True)
         show_heatmap = st.toggle("Show Crime Heatmap", True)
-        show_markers = st.toggle("Show Individual Crime Points", False)
+        show_markers = st.toggle("Show Individual Crime Points", True)
+
+    with st.sidebar.expander("Animated Playback (beta)", expanded=False):
+        enable_timelapse = st.checkbox(
+            "Enable Playable Timeline",
+            value=False,
+            help="Construye una animación por periodos para reproducir la evolución temporal.",
+        )
+        if enable_timelapse:
+            freq_labels = list(_TIMELINE_FREQ_OPTIONS.keys())
+            timeline_freq_label = st.selectbox(
+                "Bucket temporal",
+                options=freq_labels,
+                index=freq_labels.index("Daily") if "Daily" in freq_labels else 0,
+            )
+            timeline_max_frames = st.slider(
+                "Número máximo de fotogramas",
+                min_value=5,
+                max_value=120,
+                value=40,
+                help="Controla cuántos pasos tendrá la animación para evitar mapas saturados.",
+            )
+        else:
+            timeline_freq_label = None
+            timeline_max_frames = 0
 
     if show_heatmap:
         with st.sidebar.expander("Customize Heatmap"):
@@ -184,7 +365,10 @@ def render_interactive_map(embed: bool = False):
         max_count = crime_counts['crime_count'].max()
         colormap = cm.linear.YlOrRd_09.scale(0, max_count if max_count > 0 else 1)
         colormap.caption = 'Crime Count in Selected Period'
+        colormap.width = 800  # make legend bar wider for readability
+        colormap.length = 10000  # increase length so color gradations are clearer
         m.add_child(colormap)
+        m.add_child(LegendTickFormatter())
 
         if show_alcaldias:
             folium.GeoJson(
@@ -206,6 +390,9 @@ def render_interactive_map(embed: bool = False):
                 highlight_function=lambda x: {'weight': 3, 'color': 'yellow'}
             ).add_to(m)
 
+    timeline_layers_added = False
+    timeline_note = None
+
     if not df_filtered.empty:
         if show_heatmap:
             heat_data = [[row['latitud'], row['longitud']] for _, row in df_filtered.iterrows()]
@@ -220,6 +407,49 @@ def render_interactive_map(embed: bool = False):
                     popup=popup_html,
                     icon=folium.Icon(color="purple", icon="info-sign")
                 ).add_to(marker_cluster)
+
+    if enable_timelapse and timeline_freq_label and not df_filtered.empty:
+        freq_meta = _TIMELINE_FREQ_OPTIONS[timeline_freq_label]
+        heatmap_frames, frame_labels, sliced_df, timeline_truncated = _prepare_timelapse_payload(
+            df_filtered,
+            timeline_freq_label,
+            timeline_max_frames,
+        )
+
+        if heatmap_frames:
+            TimelineHeatMap(
+                data=heatmap_frames,
+                index=frame_labels,
+                auto_play=False,
+                max_opacity=0.8,
+                radius=heatmap_radius or 15,
+                use_local_extrema=True,
+                name="Heatmap Timeline",
+                display_index=True,
+            ).add_to(m)
+            timeline_layers_added = True
+
+        geojson_payload = _build_timestamped_geojson(sliced_df, TIMELINE_POINT_LIMIT)
+        if geojson_payload:
+            TimestampedGeoJson(
+                data=geojson_payload,
+                period=freq_meta['period'],
+                duration=freq_meta['period'],
+                transition_time=400,
+                auto_play=False,
+                loop=False,
+                add_last_point=True,
+            ).add_to(m)
+            timeline_layers_added = True
+
+        if not timeline_layers_added:
+            timeline_note = "La animación no pudo generarse con los datos filtrados."
+        elif timeline_truncated:
+            timeline_note = "Timeline truncada para mantener el rendimiento."
+    elif enable_timelapse and not df_filtered.empty:
+        timeline_note = "Selecciona un bucket temporal para activar la animación."
+    elif enable_timelapse and df_filtered.empty:
+        timeline_note = "No hay datos filtrados para generar la animación."
 
     if st.session_state.search_result:
         loc = st.session_state.search_result
@@ -243,6 +473,9 @@ def render_interactive_map(embed: bool = False):
                     icon=folium.Icon(color='blue', icon='star')
                 ).add_to(poi_fg)
             poi_fg.add_to(m)
+
+    if timeline_note:
+        st.caption(f"ℹ️ {timeline_note}")
 
     Fullscreen(position="topleft").add_to(m)
     MeasureControl(position="bottomleft", primary_length_unit="kilometers").add_to(m)
