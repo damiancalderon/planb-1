@@ -11,7 +11,7 @@ from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from sklearn.cluster import KMeans 
 from sklearn.metrics import classification_report
-from scipy.stats import randint 
+from scipy.stats import randint, uniform 
 import warnings
 
 warnings.filterwarnings('ignore')
@@ -160,13 +160,20 @@ def train_classification_models():
                                                                n_jobs=-1,
                                                                eval_metric='logloss',
                                                                use_label_encoder=False,
+                                                               objective='binary:logistic',
+                                                               max_delta_step=1,
                                                                scale_pos_weight=scale_pos_weight))])
     
     param_dist_xgb = {
-        'classifier__n_estimators': randint(100, 300),
-        'classifier__max_depth': [5, 6, 8, 10],
-        'classifier__learning_rate': [0.01, 0.05, 0.1],
-        'classifier__subsample': [0.7, 0.8, 1.0]
+        'classifier__n_estimators': randint(120, 280),
+        'classifier__max_depth': [3, 4, 5, 6],
+        'classifier__learning_rate': [0.01, 0.03, 0.05, 0.08],
+        'classifier__subsample': [0.6, 0.75, 0.9],
+        'classifier__colsample_bytree': [0.6, 0.75, 0.9],
+        'classifier__min_child_weight': randint(3, 10),
+        'classifier__gamma': uniform(0.0, 2.0),
+        'classifier__reg_lambda': uniform(0.5, 1.5),
+        'classifier__reg_alpha': uniform(0.0, 1.0)
     }
 
     random_search_xgb = RandomizedSearchCV(pipeline_xgb, 

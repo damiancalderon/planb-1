@@ -18,7 +18,6 @@ from folium.plugins import (
     TimestampedGeoJson,
 )
 from folium.utilities import none_max, none_min
-from geopy.exc import GeocoderServiceError, GeocoderTimedOut
 from jinja2 import Template
 from streamlit_folium import st_folium
 
@@ -104,8 +103,6 @@ def _init_session_state() -> None:
         st.session_state.search_result = None
     if 'last_clicked_address' not in st.session_state:
         st.session_state.last_clicked_address = None
-    if 'poi_results' not in st.session_state:
-        st.session_state.poi_results = {}
 
 
 def _prepare_timelapse_payload(df: pd.DataFrame, freq_key: str, max_frames: int):
@@ -184,17 +181,6 @@ def _build_timestamped_geojson(df: pd.DataFrame, max_points: int = TIMELINE_POIN
 
 
 @st.cache_data
-def find_pois(query, viewbox, limit=20):
-    try:
-        geolocator = dp.get_geolocator()
-        pois = geolocator.geocode(query, exactly_one=False, limit=limit, viewbox=viewbox, bounded=True)
-        return pois if pois else []
-    except (GeocoderTimedOut, GeocoderServiceError) as e:
-        st.error(f"POI service error: {e}")
-    return []
-
-
-@st.cache_data
 def load_and_clean_raw_data():
     try:
         df_raw, _, _ = dp.load_data()
@@ -241,7 +227,7 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
             Bienvenido a la herramienta interactiva de visualización delictiva para la Ciudad de México.
             Esta plataforma permite un análisis profundo con filtros dinámicos,
             visualizaciones por capas y controles interactivos del mapa.
-            Usa la barra lateral para personalizar tu análisis, buscar ubicaciones y descubrir puntos de interés.
+            Usa la barra lateral para personalizar tu análisis y buscar ubicaciones de referencia.
             """
         )
 
@@ -250,7 +236,7 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
 
     st.sidebar.header("⚙️ Controles y filtros del mapa")
 
-    with st.sidebar.expander("Búsqueda Nominatim y puntos de interés", expanded=True):
+    with st.sidebar.expander("Búsqueda Nominatim", expanded=True):
         address_query = st.text_input("Buscar dirección o punto de referencia:", placeholder="Ej.: Palacio de Bellas Artes")
         if st.button("Buscar", use_container_width=True):
             if address_query:
@@ -271,20 +257,6 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
                     st.session_state.search_result = MockLocation(lat, lon, address or address_query)
             else:
                 st.session_state.search_result = None
-
-        st.markdown("---")
-        poi_query = st.text_input("Encontrar puntos de interés cercanos:", placeholder="Ej.: Policía, Hospital, Museo")
-        if st.button("Buscar PDI", use_container_width=True):
-            if poi_query:
-                cdmx_viewbox = ((19.59, -99.36), (19.12, -98.94))
-                st.session_state.poi_results[poi_query] = find_pois(poi_query, viewbox=cdmx_viewbox)
-                if not st.session_state.poi_results[poi_query]:
-                    st.warning(f"No se encontraron resultados para '{poi_query}' en la CDMX.")
-
-        if st.session_state.poi_results:
-            if st.button("Limpiar capas de PDI", use_container_width=True):
-                st.session_state.poi_results = {}
-                st.rerun()
 
     with st.sidebar.expander("Filtrar por delito y tiempo", expanded=True):
         if not df_crime.empty:
@@ -391,18 +363,6 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
         ).add_to(m)
         m.location = [loc.latitude, loc.longitude]
         m.zoom_start = 15
-
-    if st.session_state.poi_results:
-        for query, pois in st.session_state.poi_results.items():
-            poi_fg = folium.FeatureGroup(name=f"Puntos de interés: {query.title()}", show=True)
-            for poi in pois:
-                folium.Marker(
-                    location=[poi.latitude, poi.longitude],
-                    popup=f"<b>{poi.raw.get('type', 'poi').title()}:</b><br>{poi.address}",
-                    tooltip=poi.address.split(',')[0],
-                    icon=folium.Icon(color='blue', icon='star')
-                ).add_to(poi_fg)
-            poi_fg.add_to(m)
 
     Fullscreen(position="topleft").add_to(m)
     MeasureControl(position="bottomleft", primary_length_unit="kilometers").add_to(m)

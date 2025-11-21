@@ -1,12 +1,19 @@
 # modules/ui_analysis.py
 import streamlit as st
 import plotly.graph_objects as go
+import altair as alt
 import database
 import pandas as pd
 from statsmodels.tsa.statespace.sarimax import SARIMAXResults
 
 # ✅ Reutilizamos lógica de EDA / tendencias desde ui_info
-from .ui_info import load_info_df, compute_eda_aggregates, line_chart, _axis, THEME_PALETTE
+from .ui_info import (
+    load_info_df,
+    compute_eda_aggregates,
+    _axis,
+    THEME_PALETTE,
+    VIOLENCE_TRANSLATIONS,
+)
 
 
 # --- Función para Cargar y Usar el Modelo de Forecast ---
@@ -46,6 +53,70 @@ def get_forecast(_model, steps=7):
             st.warning(f"Error al generar predicción: {e}")
             return pd.DataFrame()
     return pd.DataFrame()
+
+
+def _tendency_line_chart(
+    df,
+    *,
+    x_field,
+    y_field,
+    color_field,
+    title,
+    legend_title,
+    x_title,
+    y_title,
+    x_type="O",
+):
+    """Altair chart with focus/hover interactions for tendencia plots."""
+    if df is None or df.empty:
+        return None
+
+    chart_df = (
+        df[[x_field, y_field, color_field]]
+        .dropna(subset=[x_field, y_field, color_field])
+        .copy()
+    )
+    if chart_df.empty:
+        return None
+
+    series_selection = alt.selection_point(fields=[color_field], bind="legend")
+
+    common_encodings = dict(
+        x=alt.X(f"{x_field}:{x_type}", axis=_axis(x_title)),
+        y=alt.Y(f"{y_field}:Q", axis=_axis(y_title)),
+        color=alt.Color(
+            f"{color_field}:N",
+            title=legend_title,
+            scale=alt.Scale(range=THEME_PALETTE[: max(1, chart_df[color_field].nunique())]),
+            legend=alt.Legend(title=legend_title, symbolType="circle"),
+        ),
+        tooltip=[
+            alt.Tooltip(f"{x_field}:{x_type}", title=x_title),
+            alt.Tooltip(f"{color_field}:N", title=legend_title),
+            alt.Tooltip(f"{y_field}:Q", title="Total de casos", format=","),
+        ],
+    )
+
+    lines = (
+        alt.Chart(chart_df, width=950, height=420)
+        .mark_line(point=False, strokeWidth=2.5)
+        .encode(**common_encodings)
+        .encode(opacity=alt.condition(series_selection, alt.value(1), alt.value(0.2)))
+    )
+
+    points = (
+        alt.Chart(chart_df, width=950, height=420)
+        .mark_circle(size=55)
+        .encode(**common_encodings)
+        .encode(opacity=alt.condition(series_selection, alt.value(1), alt.value(0.2)))
+    )
+
+    return (
+        (lines + points)
+        .add_params(series_selection)
+        .properties(title=title)
+        .interactive()
+    )
 
 
 # --- Render principal para la página de Analysis ---
@@ -316,35 +387,38 @@ def render():
     # Tendencia Anual por Alcaldía (Top 8)
     if not agg["yearly_mun_top"].empty:
         st.subheader("Tendencia Anual por Alcaldía (8 principales)")
-        st.altair_chart(
-            line_chart(
-                agg["yearly_mun_top"],
-                "anio_inicio",
-                "count",
-                color_field="alcaldia_std",
-                title="Tendencia Anual por Alcaldía (8 principales)",
-                width=950,
-                height=420,
-                x_axis=_axis("Año"),
-                y_axis=_axis("Número de casos"),
-            ),
-            use_container_width=True,
+        chart = _tendency_line_chart(
+            agg["yearly_mun_top"],
+            x_field="anio_inicio",
+            y_field="count",
+            color_field="alcaldia_std",
+            title="Tendencia Anual por Alcaldía (8 principales)",
+            legend_title="Alcaldía",
+            x_title="Año",
+            y_title="Número de casos",
         )
+        if chart:
+            st.altair_chart(chart, use_container_width=True)
 
     # Tendencia Anual: Violento vs No Violento
     if not agg["yearly_viol"].empty:
         st.subheader("Tendencia Anual: Violento vs No Violento")
-        st.altair_chart(
-            line_chart(
-                agg["yearly_viol"],
-                "anio_inicio",
-                "count",
-                color_field="violence_type",
-                title="Tendencia Anual: Violento vs No Violento",
-                width=950,
-                height=420,
-                x_axis=_axis("Año"),
-                y_axis=_axis("Número de casos"),
-            ),
-            use_container_width=True,
+        yearly_viol = agg["yearly_viol"].copy()
+        yearly_viol["violence_label"] = yearly_viol["violence_type"].map(
+            VIOLENCE_TRANSLATIONS
         )
+        yearly_viol["violence_label"] = yearly_viol["violence_label"].fillna(
+            "Sin tipo"
+        )
+        chart = _tendency_line_chart(
+            yearly_viol,
+            x_field="anio_inicio",
+            y_field="count",
+            color_field="violence_label",
+            title="Tendencia Anual: Violento vs No Violento",
+            legend_title="Tipo de violencia",
+            x_title="Año",
+            y_title="Número de casos",
+        )
+        if chart:
+            st.altair_chart(chart, use_container_width=True)

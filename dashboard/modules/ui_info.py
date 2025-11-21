@@ -2,8 +2,8 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-import plotly.express as px
 import plotly.graph_objects as go  # Para los gauges
+from contextlib import contextmanager
 
 # ✅ helpers propios
 from .helpers import MONTH_NAMES
@@ -39,6 +39,21 @@ THEME_PALETTE = [
     "#64748B", "#0EA5E9", "#14B8A6", "#F59E0B", "#64748B",
 ]
 
+CLASSIFICATION_TRANSLATIONS = {
+    "Patrimony": "Patrimonio",
+    "Freedom and Sexual Segurity": "Libertad y Seguridad Sexual",
+    "Personal Freedom": "Libertad Personal",
+    "Life and Integrity": "Vida e Integridad",
+    "Family": "Familia",
+    "Society": "Sociedad",
+    "Others": "Otros",
+}
+
+VIOLENCE_TRANSLATIONS = {
+    "Violent": "Violento",
+    "Non-Violent": "No violento",
+}
+
 # =================== HELPERS ===================
 MONTH_NUM = {v: k for k, v in MONTH_NAMES.items()}  # "Enero"->1, etc.
 
@@ -67,6 +82,30 @@ def _safe_uniques(series: pd.Series) -> list:
     except Exception:
         vals = []
     return vals
+
+def _classification_label(value):
+    """Traduce las clasificaciones a español para mostrarlas en la UI."""
+    if value is None:
+        return "Sin clasificación"
+    try:
+        if pd.isna(value):
+            return "Sin clasificación"
+    except TypeError:
+        pass
+    value_str = str(value)
+    return CLASSIFICATION_TRANSLATIONS.get(value_str, value_str)
+
+def _violence_label(value):
+    """Traduce el tipo de violencia a español para la interfaz."""
+    if value is None:
+        return "Sin tipo"
+    try:
+        if pd.isna(value):
+            return "Sin tipo"
+    except TypeError:
+        pass
+    value_str = str(value)
+    return VIOLENCE_TRANSLATIONS.get(value_str, value_str)
 
 # =================== DATA LOAD (DuckDB) ===================
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -170,15 +209,25 @@ def compute_eda_aggregates(df: pd.DataFrame):
     else:
         hour_counts = pd.DataFrame({"hour": list(HOUR_RANGE), "count": 0})
 
-    alc_counts = df.get("alcaldia_std", pd.Series([], dtype="object")).value_counts().sort_values(ascending=True).reset_index()
-    if not alc_counts.empty:
-        alc_counts.columns = ["alcaldia", "count"]
+    alc_series = df.get("alcaldia_std", pd.Series([], dtype="object"))
+    if not alc_series.empty:
+        alc_counts = (
+            alc_series.dropna()
+            .value_counts()
+            .rename_axis("alcaldia")
+            .reset_index(name="count")
+        )
     else:
         alc_counts = pd.DataFrame(columns=["alcaldia", "count"])
 
-    col_counts = df.get("colonia_std", pd.Series([], dtype="object")).value_counts().nlargest(10).sort_values(ascending=True).reset_index()
-    if not col_counts.empty:
-        col_counts.columns = ["colonia", "count"]
+    col_series = df.get("colonia_std", pd.Series([], dtype="object"))
+    if not col_series.empty:
+        col_counts = (
+            col_series.dropna()
+            .value_counts()
+            .rename_axis("colonia")
+            .reset_index(name="count")
+        )
     else:
         col_counts = pd.DataFrame(columns=["colonia", "count"])
 
@@ -191,10 +240,12 @@ def compute_eda_aggregates(df: pd.DataFrame):
                 {"nan", "none", "delito de bajo impacto", "delitos de bajo impacto", "bajo impacto"}
             )
         ]
-        del_counts = del_series.value_counts().nlargest(10).sort_values(ascending=True).reset_index()
-        if not del_counts.empty:
-            del_counts.columns = ["delito", "count"]
-        else:
+        del_counts = (
+            del_series.value_counts()
+            .rename_axis("delito")
+            .reset_index(name="count")
+        )
+        if del_counts.empty:
             del_counts = pd.DataFrame(columns=["delito", "count"])
     else:
         del_counts = pd.DataFrame(columns=["delito", "count"])
@@ -221,8 +272,9 @@ def compute_eda_aggregates(df: pd.DataFrame):
         v_counts_raw = v_counts_raw.dropna().apply(lambda x: x.strip())
         v_counts = v_counts_raw.value_counts().reset_index()
         v_counts.columns = ["violence", "count"]
+        v_counts["violence_label"] = v_counts["violence"].apply(_violence_label)
     else:
-        v_counts = pd.DataFrame(columns=["violence", "count"])
+        v_counts = pd.DataFrame(columns=["violence", "count", "violence_label"])
 
     if {"alcaldia_std", "crime_classification"}.issubset(df.columns):
         stacked = df.groupby(["alcaldia_std", "crime_classification"]).size().reset_index(name="count")
@@ -324,12 +376,27 @@ def line_chart(df, x, y, color_field=None, *, x_type="O", y_type="Q", title="", 
         )
     return mk.properties(title=title)
 
-def donut_chart(df, field, count_col, *, title="", colors=None, width=700, height=360, inner_radius=70):
+def donut_chart(
+    df,
+    field,
+    count_col,
+    *,
+    title="",
+    colors=None,
+    width=700,
+    height=360,
+    inner_radius=70,
+    legend_title=None,
+):
     n = max(3, len(df)) if isinstance(df, pd.DataFrame) else 3
     colors = colors or THEME_PALETTE[:n]
     return alt.Chart(df, **_cfg(width, height)).mark_arc(innerRadius=inner_radius).encode(
         theta=alt.Theta(f"{count_col}:Q"),
-        color=alt.Color(f"{field}:N", scale=alt.Scale(range=colors)),
+        color=alt.Color(
+            f"{field}:N",
+            scale=alt.Scale(range=colors),
+            legend=alt.Legend(title=legend_title) if legend_title is not None else None,
+        ),
         tooltip=[
             alt.Tooltip(f"{field}:N", title="Categoría"),
             alt.Tooltip(f"{count_col}:Q", title="Conteo"),
@@ -343,6 +410,20 @@ def heatmap_chart(df, x, y, z, *, title="", width=700, height=350, x_axis=None, 
         color=alt.Color(f"{z}:Q", scale=alt.Scale(scheme="blues")),
         tooltip=[f"{x}:N", f"{y}:N", f"{z}:Q"],
     ).properties(title=title)
+
+def section_title(text: str):
+    st.markdown(
+        f"<h2 style='font-size:32px; color:#E5E7EB; margin:0.5rem 0 0.1rem;'>{text}</h2>",
+        unsafe_allow_html=True,
+    )
+
+@contextmanager
+def chart_block(title: str):
+    """Helper container that injects a header with an inline filter slot."""
+    with st.container():
+        header_cols = st.columns([4, 1])
+        header_cols[0].markdown(f"#### {title}")
+        yield header_cols[1]
 
 # =================== RENDER ===================
 def render():
@@ -386,8 +467,18 @@ def render():
         dels = _safe_uniques(base_df["delito_std"]) if "delito_std" in base_df else []
 
         alc_sel = st.multiselect("Alcaldías", options=alcs, default=alcs[:])
-        cls_sel = st.multiselect("Clasificación", options=cls, default=cls[:])
-        viol_sel = st.multiselect("Violencia", options=viol, default=viol[:])
+        cls_sel = st.multiselect(
+            "Clasificación",
+            options=cls,
+            default=cls[:],
+            format_func=_classification_label,
+        )
+        viol_sel = st.multiselect(
+            "Violencia",
+            options=viol,
+            default=viol[:],
+            format_func=_violence_label,
+        )
 
         # Para no saturar, top N delitos por frecuencia como opciones por defecto
         if dels:
@@ -553,167 +644,341 @@ def render():
         "Conclusión: la hipótesis no se sostiene totalmente, aunque la noche sigue siendo significativa."
     )
 
-    # === UNIVARIATE ===
-    st.header("Distribuciones Univariadas")
-    cU1, cU2 = st.columns(2)
-    with cU1:
-        st.altair_chart(
-            bar_chart(
-                agg["year_counts"],
-                "year",
-                "count",
-                sort=list(range(2015, 2026)),
-                title="Crímenes por Año",
-                color=THEME_PALETTE[0],
-                x_axis=_axis("Año"),
-                y_axis=_axis("Número de casos"),
-            ),
-            use_container_width=True,
-        )
-    with cU2:
-        st.altair_chart(
-            bar_chart(
-                agg["month_counts"],
-                "month_name",
-                "count",
-                sort=[MONTH_NAMES[m] for m in range(1, 13)],
-                title="Crímenes por Mes",
-                color=THEME_PALETTE[2],
-                x_axis=_axis("Mes"),
-                y_axis=_axis("Número de casos"),
-            ),
-            use_container_width=True,
-        )
-    st.altair_chart(
-        bar_chart(
-            agg["hour_counts"],
-            "hour",
-            "count",
-            sort=list(range(24)),
-            title="Distribución por Hora del Día",
-            color=THEME_PALETTE[1],
-            x_axis=_axis("Hora del día"),
-            y_axis=_axis("Número de casos"),
-            width=980,
-        ),
-        use_container_width=True,
-    )
+    # === TEMPORAL DISTRIBUTIONS ===
+    section_title("Temporal")
+    st.caption("Distribuciones temporales")
 
-    # === SPATIAL & CATEGORIES ===
-    st.header("Espacial & Categorías")
-    cS1, cS2 = st.columns(2)
-    with cS1:
-        st.altair_chart(
-            barh_chart(
-                agg["alc_counts"],
-                "alcaldia",
-                "count",
-                title="Distribución por Alcaldía",
-                color=THEME_PALETTE[3],
-                x_axis=_axis("Número de casos"),
-                y_axis=_axis("Alcaldía", orient="left"),
-            ),
-            use_container_width=True,
-        )
-    with cS2:
-        st.altair_chart(
-            barh_chart(
-                agg["col_counts"],
-                "colonia",
-                "count",
-                title="10 colonias con más incidentes",
-                color=THEME_PALETTE[4],
-                x_axis=_axis("Número de casos"),
-                y_axis=_axis("Colonia", orient="left"),
-            ),
-            use_container_width=True,
-        )
-    st.altair_chart(
-        barh_chart(
-            agg["del_counts"],
-            "delito",
-            "count",
-            title="10 delitos con mayor frecuencia",
-            color=THEME_PALETTE[5],
-            x_axis=_axis("Número de casos"),
-            y_axis=_axis("Tipo de delito", orient="left"),
-            height=320,
-        ),
-        use_container_width=True,
-    )
-
-    # === CLASSIFICATION & VIOLENCE ===
-    st.header("Clasificación & Violencia")
-    cC1, cC2 = st.columns(2)
-
-    # Donut Chart de Clasificación
-    with cC1:
-        st.altair_chart(
-            donut_chart(
-                agg["cls_counts"],
-                "classification",
-                "count",
-                title="Distribución por Clasificación",
-            ),
-            use_container_width=True,
-        )
-
-    # Donut Chart de Violencia
-    with cC2:
-        v_counts = agg["v_counts"]
-        if not v_counts.empty:
-            colors = (
-                ["#1E3A8A", "#A3B3C2"]
-                if set(v_counts["violence"]) >= {"Violent", "Non-Violent"}
-                else THEME_PALETTE[: len(v_counts)]
-            )
+    year_df = agg["year_counts"]
+    if year_df.empty:
+        st.info("Sin datos para el gráfico anual.")
+    else:
+        with chart_block("Crímenes por Año") as filter_col:
+            y_min, y_max = int(year_df["year"].min()), int(year_df["year"].max())
+            with filter_col:
+                with st.expander("Filtros", expanded=False):
+                    year_window = st.slider(
+                        "Periodo a mostrar",
+                        min_value=y_min,
+                        max_value=y_max,
+                        value=(y_min, y_max),
+                        step=1,
+                        key="year_chart_slider",
+                    )
+            yr_filtered = year_df[
+                (year_df["year"] >= year_window[0])
+                & (year_df["year"] <= year_window[1])
+            ]
             st.altair_chart(
-                donut_chart(
-                    v_counts,
-                    "violence",
+                bar_chart(
+                    yr_filtered,
+                    "year",
                     "count",
-                    title="Violento vs No Violento",
-                    colors=colors,
+                    sort=list(range(2015, 2026)),
+                    title="Crímenes por Año",
+                    color=THEME_PALETTE[0],
+                    x_axis=_axis("Año"),
+                    y_axis=_axis("Número de casos"),
                 ),
                 use_container_width=True,
             )
-        else:
-            st.info("No se encontró columna 'violence_type'.")
 
-    # === SPATIAL & CATEGORIES STACKED ===
-    stacked = agg["stacked"]
-    if not stacked.empty:
-        order_mun = (
-            stacked.groupby("alcaldia_std")["count"]
-            .sum()
-            .sort_values(ascending=True)
-            .index
-            .tolist()
-        )
-        ch = (
-            alt.Chart(stacked, **_cfg(width=900, height=420))
-            .mark_bar()
-            .encode(
-                x=alt.X("count:Q", axis=_axis("Número de casos")),
-                y=alt.Y(
-                    "alcaldia_std:N",
-                    sort=order_mun,
-                    axis=_axis("Alcaldía", orient="left"),
-                ),
-                color=alt.Color(
-                    "crime_classification:N",
-                    scale=alt.Scale(
-                        range=THEME_PALETTE[
-                            : max(3, stacked["crime_classification"].nunique())
-                        ]
-                    ),
-                ),
-                tooltip=["alcaldia_std:N", "crime_classification:N", "count:Q"],
-            )
-            .properties(title="Alcaldía vs Clasificación de Delito (apilado)")
-        )
-        st.altair_chart(ch, use_container_width=True)
+    month_df = agg["month_counts"]
+    if month_df.empty:
+        st.info("Sin datos mensuales para graficar.")
     else:
+        with chart_block("Crímenes por Mes") as filter_col:
+            month_options = month_df["month_name"].tolist()
+            with filter_col:
+                with st.expander("Filtros", expanded=False):
+                    months_selected = st.multiselect(
+                        "Meses a incluir",
+                        options=month_options,
+                        default=month_options,
+                        key="month_chart_filter",
+                    )
+            selected_months = months_selected or month_options
+            month_filtered = month_df[month_df["month_name"].isin(selected_months)]
+            month_filtered = month_filtered.sort_values("month")
+            st.altair_chart(
+                bar_chart(
+                    month_filtered,
+                    "month_name",
+                    "count",
+                    sort=[MONTH_NAMES[m] for m in range(1, 13)],
+                    title="Crímenes por Mes",
+                    color=THEME_PALETTE[2],
+                    x_axis=_axis("Mes"),
+                    y_axis=_axis("Número de casos"),
+                ),
+                use_container_width=True,
+            )
+
+    hour_df = agg["hour_counts"]
+    if hour_df.empty:
+        st.info("Sin datos horarios.")
+    else:
+        with chart_block("Distribución por Hora del Día") as filter_col:
+            with filter_col:
+                with st.expander("Filtros", expanded=False):
+                    hour_window = st.slider(
+                        "Horas",
+                        min_value=0,
+                        max_value=23,
+                        value=(0, 23),
+                        step=1,
+                        key="hour_chart_slider",
+                    )
+            hr_filtered = hour_df[
+                (hour_df["hour"] >= hour_window[0])
+                & (hour_df["hour"] <= hour_window[1])
+            ]
+            st.altair_chart(
+                bar_chart(
+                    hr_filtered,
+                    "hour",
+                    "count",
+                    sort=list(range(24)),
+                    title="Distribución por Hora del Día",
+                    color=THEME_PALETTE[1],
+                    x_axis=_axis("Hora del día"),
+                    y_axis=_axis("Número de casos"),
+                    width=980,
+                ),
+                use_container_width=True,
+            )
+
+    # === SPATIAL & CATEGORY DISTRIBUTIONS ===
+    section_title("Espacial & Categorías")
+    st.caption("División espacial y categorías")
+
+    alc_df = agg["alc_counts"]
+    if alc_df.empty:
+        st.info("No hay registros por alcaldía.")
+    else:
+        with chart_block("Distribución por Alcaldía") as filter_col:
+            alc_options = alc_df["alcaldia"].tolist()
+            default_alc = alc_options if len(alc_options) <= 8 else alc_options[:8]
+            with filter_col:
+                with st.expander("Filtros", expanded=False):
+                    alc_selected = st.multiselect(
+                        "Selecciona alcaldías",
+                        options=alc_options,
+                        default=default_alc,
+                        key="alc_chart_filter",
+                    )
+            chosen_alc = alc_selected or alc_options
+            alc_filtered = alc_df[alc_df["alcaldia"].isin(chosen_alc)]
+            alc_filtered = alc_filtered.sort_values("count", ascending=True)
+            st.altair_chart(
+                barh_chart(
+                    alc_filtered,
+                    "alcaldia",
+                    "count",
+                    title="Distribución por Alcaldía",
+                    color=THEME_PALETTE[3],
+                    x_axis=_axis("Número de casos"),
+                    y_axis=_axis("Alcaldía", orient="left"),
+                ),
+                use_container_width=True,
+            )
+
+    col_df = agg["col_counts"]
+    if col_df.empty:
+        st.info("Sin datos de colonias disponibles.")
+    else:
+        with chart_block("Colonias con más incidentes") as filter_col:
+            max_top = max(1, min(30, len(col_df)))
+            min_top = 1 if max_top < 5 else 5
+            default_top = min(10, max_top)
+            with filter_col:
+                with st.expander("Filtros", expanded=False):
+                    top_col = st.slider(
+                        "Cantidad de colonias",
+                        min_value=min_top,
+                        max_value=max_top,
+                        value=default_top,
+                        step=1,
+                        key="colonias_top_slider",
+                    )
+            cols_filtered = col_df.head(top_col).sort_values("count", ascending=True)
+            st.altair_chart(
+                barh_chart(
+                    cols_filtered,
+                    "colonia",
+                    "count",
+                    title=f"Top {top_col} colonias con más incidentes",
+                    color=THEME_PALETTE[4],
+                    x_axis=_axis("Número de casos"),
+                    y_axis=_axis("Colonia", orient="left"),
+                ),
+                use_container_width=True,
+            )
+
+    del_df = agg["del_counts"]
+    if del_df.empty:
+        st.info("Sin datos de delitos para graficar.")
+    else:
+        with chart_block("Delitos con mayor frecuencia") as filter_col:
+            max_top = max(1, min(30, len(del_df)))
+            min_top = 1 if max_top < 5 else 5
+            default_top = min(10, max_top)
+            with filter_col:
+                with st.expander("Filtros", expanded=False):
+                    top_del = st.slider(
+                        "Cantidad de delitos",
+                        min_value=min_top,
+                        max_value=max_top,
+                        value=default_top,
+                        step=1,
+                        key="delitos_top_slider",
+                    )
+            delitos_filtered = del_df.head(top_del).sort_values("count", ascending=True)
+            st.altair_chart(
+                barh_chart(
+                    delitos_filtered,
+                    "delito",
+                    "count",
+                    title=f"Top {top_del} delitos con mayor frecuencia",
+                    color=THEME_PALETTE[5],
+                    x_axis=_axis("Número de casos"),
+                    y_axis=_axis("Tipo de delito", orient="left"),
+                    height=320,
+                ),
+                use_container_width=True,
+            )
+
+    # === CLASSIFICATION & VIOLENCE ===
+    section_title("Clasificación & Violencia")
+    st.caption("Clasificación y violencia")
+
+    cls_df = agg["cls_counts"]
+    if cls_df.empty:
+        st.info("Sin datos de clasificación para mostrar.")
+    else:
+        with chart_block("Distribución por Clasificación") as filter_col:
+            cls_options = cls_df["classification"].dropna().tolist()
+            with filter_col:
+                with st.expander("Filtros", expanded=False):
+                    cls_selected = st.multiselect(
+                        "Clasificaciones",
+                        options=cls_options,
+                        default=cls_options,
+                        format_func=_classification_label,
+                        key="classification_chart_filter",
+                    )
+            chosen_cls = cls_selected or cls_options
+            cls_filtered = cls_df[cls_df["classification"].isin(chosen_cls)].copy()
+            cls_filtered["classification_label"] = cls_filtered["classification"].apply(_classification_label)
+            st.altair_chart(
+                donut_chart(
+                    cls_filtered,
+                    "classification_label",
+                    "count",
+                    title="Distribución por Clasificación",
+                    legend_title="",
+                ),
+                use_container_width=True,
+            )
+
+    v_counts = agg["v_counts"]
+    if v_counts.empty:
+        st.info("No se encontró columna 'violence_type'.")
+    else:
+        with chart_block("Violento vs No Violento") as filter_col:
+            label_field = "violence_label" if "violence_label" in v_counts.columns else "violence"
+            viol_options = v_counts[label_field].tolist()
+            with filter_col:
+                with st.expander("Filtros", expanded=False):
+                    viol_selected = st.multiselect(
+                        "Tipo de violencia",
+                        options=viol_options,
+                        default=viol_options,
+                        key="violence_chart_filter",
+                    )
+            chosen_violence = viol_selected or viol_options
+            viol_filtered = v_counts[v_counts[label_field].isin(chosen_violence)]
+            colors = (
+                ["#1E3A8A", "#A3B3C2"]
+                if set(v_counts.get("violence", [])) >= {"Violent", "Non-Violent"}
+                else THEME_PALETTE[: max(1, len(viol_filtered))]
+            )
+            st.altair_chart(
+                donut_chart(
+                    viol_filtered,
+                    label_field,
+                    "count",
+                    title="Violento vs No Violento",
+                    colors=colors,
+                    legend_title="",
+                ),
+                use_container_width=True,
+            )
+
+    stacked = agg["stacked"]
+    if stacked.empty:
         st.info("Sin datos para el stacked por alcaldía y clasificación.")
+    else:
+        with chart_block("Alcaldía vs Clasificación de Delito (apilado)") as filter_col:
+            order_mun = (
+                stacked.groupby("alcaldia_std")["count"]
+                .sum()
+                .sort_values(ascending=True)
+                .index
+                .tolist()
+            )
+            cls_options = (
+                stacked["crime_classification"].dropna().unique().tolist()
+                if "crime_classification" in stacked.columns
+                else []
+            )
+            with filter_col:
+                with st.expander("Filtros", expanded=False):
+                    colA, colB = st.columns(2)
+                    alc_selected = colA.multiselect(
+                        "Alcaldías",
+                        options=order_mun,
+                        default=order_mun,
+                        key="stacked_alc_filter",
+                    )
+                    cls_selected = colB.multiselect(
+                        "Clasificación",
+                        options=cls_options,
+                        default=cls_options,
+                        format_func=_classification_label,
+                        key="stacked_cls_filter",
+                    )
+            chosen_alc = alc_selected or order_mun
+            chosen_cls = cls_selected or cls_options
+            stacked_filtered = stacked[
+                stacked["alcaldia_std"].isin(chosen_alc)
+                & stacked["crime_classification"].isin(chosen_cls)
+            ]
+            if stacked_filtered.empty:
+                st.info("Selecciona al menos una alcaldía y una clasificación.")
+            else:
+                ch = (
+                    alt.Chart(stacked_filtered, **_cfg(width=900, height=420))
+                    .mark_bar()
+                    .encode(
+                        x=alt.X("count:Q", axis=_axis("Número de casos")),
+                        y=alt.Y(
+                            "alcaldia_std:N",
+                            sort=[alc for alc in order_mun if alc in stacked_filtered["alcaldia_std"].unique()],
+                            axis=_axis("Alcaldía", orient="left"),
+                        ),
+                        color=alt.Color(
+                            "crime_classification:N",
+                            scale=alt.Scale(
+                                range=THEME_PALETTE[
+                                    : max(3, stacked_filtered["crime_classification"].nunique())
+                                ]
+                            ),
+                            legend=alt.Legend(title="Clasificación"),
+                        ),
+                        tooltip=["alcaldia_std:N", "crime_classification:N", "count:Q"],
+                    )
+                    .properties(title="Alcaldía vs Clasificación de Delito (apilado)")
+                )
+                st.altair_chart(ch, use_container_width=True)
 
   

@@ -11,6 +11,7 @@ from geopy.extra.rate_limiter import RateLimiter
 import pydeck as pdk 
 import unidecode
 from pathlib import Path 
+from .location_utils import enrich_cluster_locations
 
 # --- Configuración de página (debe estar fuera de render) ---
 st.set_page_config(page_title="Alerta Policial", page_icon="🛡️", layout="wide")
@@ -36,6 +37,7 @@ def load_models_and_data():
     
     try:
         df_clusters = pd.read_csv('cluster_info.csv')
+        df_clusters = enrich_cluster_locations(df_clusters)
     except FileNotFoundError:
         st.error("Error: 'cluster_info.csv' no encontrado.")
         df_clusters = None
@@ -121,16 +123,26 @@ def map_to_time_slot(hour):
     return 'Noche' # 19-23
 
 def get_color_from_probability(prob):
-    if prob < 0.75:
-        g = 255
-        r = int(255 * ((prob - 0.65) / 0.10))
-        return [r, g, 0, 180]
+    if prob < 0.50:
+        return [90, 155, 255, 90]  # azul tenue para riesgos muy bajos
+    elif prob < 0.65:
+        ratio = (prob - 0.50) / 0.15
+        ratio = np.clip(ratio, 0, 1)
+        g = int(200 + 55 * ratio)
+        b = int(255 - 95 * ratio)
+        return [40, g, b, 140]      # turquesa para riesgos moderados
+    elif prob < 0.75:
+        ratio = (prob - 0.65) / 0.10
+        ratio = np.clip(ratio, 0, 1)
+        r = int(255 * ratio)
+        return [r, 255, 0, 180]     # transición a amarillo
     elif prob < 0.85:
-        r = 255
-        g = int(255 * (1 - ((prob - 0.75) / 0.10)))
-        return [r, g, 0, 200]
+        ratio = (prob - 0.75) / 0.10
+        ratio = np.clip(ratio, 0, 1)
+        g = int(255 * (1 - ratio))
+        return [255, g, 0, 200]     # naranja intenso
     else:
-        return [255, 0, 0, 220]
+        return [255, 0, 0, 220]     # rojo crítico
 
 # --- 4. Funciones de Preprocessing ---
 def preprocess_inputs_v3(fecha, hora, lat, lon, alcaldia, categoria, kmeans_model):
@@ -213,16 +225,17 @@ def precalculate_48h_simulation_v3(_model_xgb, _model_kmeans, _df_clusters,
                 probability = _model_xgb.predict_proba(input_df)
                 prob_violento = probability[0][1]
                 
-                if prob_violento >= 0.65: 
-                    hotspots_48h.append({
-                        'hora_simulacion': hora_futura, 
-                        'lat': cluster['latitud'],
-                        'lon': cluster['longitud'],
-                        'probabilidad': f"{prob_violento*100:.1f}%",
-                        'calle': cluster['calle_cercana'],
-                        'radius': 200 + (prob_violento * 800),
-                        'color_rgb': get_color_from_probability(prob_violento)
-                    })
+                hotspots_48h.append({
+                    'hora_simulacion': hora_futura, 
+                    'lat': cluster['latitud'],
+                    'lon': cluster['longitud'],
+                    'probabilidad': f"{prob_violento*100:.1f}%",
+                    'probabilidad_num': prob_violento * 100,
+                    'hora_proyectada': fecha_actual.strftime("%d %b %Y - %H:00"),
+                    'calle': cluster.get('cluster_label') or cluster.get('calle_cercana') or "Ubicación sin referencia",
+                    'radius': 200 + (prob_violento * 800),
+                    'color_rgb': get_color_from_probability(prob_violento)
+                })
             except Exception as e:
                 print(f"Error prediciendo cluster {cluster['cluster_id']} / hora {hora_futura}: {e}")
     
@@ -385,15 +398,53 @@ def render():
             )
             st.session_state.df_simulacion_completa = df_simulacion_completa
             st.session_state.simulacion_categoria = map_categoria_sim 
+            st.session_state.simulacion_fecha_inicio = datetime.combine(map_fecha_sim, datetime.min.time())
     
     if "df_simulacion_completa" in st.session_state:
         st.success(f"Simulación generada para '{st.session_state.simulacion_categoria}'. Mueve el slider para explorar.")
         
-        hora_animada = st.slider("Hora de Simulación (0-47h):", 0, 47, 0, format="%d:00")
+        control_col1, control_col2, control_col3, control_col4 = st.columns([2, 1, 1, 1])
+        with control_col1:
+            hora_animada = st.slider("Hora de Simulación (0-47h):", 0, 47, 0, format="%d:00")
+        with control_col2:
+            min_prob_display = st.slider("Umbral de severidad (%)", 40, 95, 65, step=1)
+        map_styles = {
+            "Nocturno": "mapbox://styles/mapbox/dark-v9",
+            "Claro": "mapbox://styles/mapbox/light-v10",
+            "Satélite": "mapbox://styles/mapbox/satellite-streets-v12"
+        }
+        with control_col3:
+            selected_style_label = st.selectbox(
+                "Estilo del mapa",
+                options=list(map_styles.keys()),
+                index=0
+            )
+        map_style_choice = map_styles[selected_style_label]
+        with control_col4:
+            max_hotspots_display = st.slider("Máx. zonas en mapa", 5, 50, 25, step=5)
+        
+        hora_inicio_sim = st.session_state.get("simulacion_fecha_inicio")
+        if hora_inicio_sim:
+            hora_proyectada = hora_inicio_sim + timedelta(hours=hora_animada)
+            st.caption(f"Proyección para: {hora_proyectada.strftime('%d %b %Y, %H:00 hrs')}")
         
         df_hotspots_hora_actual = st.session_state.df_simulacion_completa[
             st.session_state.df_simulacion_completa['hora_simulacion'] == hora_animada
         ]
+        df_hotspots_hora_actual = df_hotspots_hora_actual.copy()
+        if 'probabilidad_num' not in df_hotspots_hora_actual.columns:
+            df_hotspots_hora_actual['probabilidad_num'] = (
+                df_hotspots_hora_actual['probabilidad'].str.rstrip('%').astype(float)
+            )
+        df_hotspots_filtrados = df_hotspots_hora_actual[
+            df_hotspots_hora_actual['probabilidad_num'] >= min_prob_display
+        ]
+        total_disponibles = len(df_hotspots_hora_actual)
+        total_sobre_umbral = len(df_hotspots_filtrados)
+        df_hotspots_visibles = df_hotspots_filtrados.sort_values(
+            by='probabilidad_num', ascending=False
+        ).head(max_hotspots_display)
+        total_mostrados = len(df_hotspots_visibles)
 
         view_state = pdk.ViewState(latitude=19.4326, longitude=-99.1332, zoom=9.5, pitch=45)
         
@@ -407,7 +458,7 @@ def render():
         
         hotspots_layer = pdk.Layer(
             'ScatterplotLayer',
-            data=df_hotspots_hora_actual, 
+            data=df_hotspots_visibles, 
             get_position='[lon, lat]',
             get_fill_color='color_rgb',
             get_radius='radius',
@@ -415,23 +466,48 @@ def render():
         )
         
         tooltip = {
-            "html": "<b>Probabilidad: {probabilidad}</b><br/>Cerca de: {calle}",
+            "html": "<b>Probabilidad: {probabilidad}</b><br/>Cerca de: {calle}<br/>{hora_proyectada}",
             "style": { "backgroundColor": "steelblue", "color": "white" }
         }
         
-        st.pydeck_chart(pdk.Deck(
-            layers=[alcaldias_layer_pred, hotspots_layer],
-            initial_view_state=view_state,
-            map_style='mapbox://styles/mapbox/dark-v9',
-            tooltip=tooltip
-        ))
-
-        if df_hotspots_hora_actual.empty:
-            st.info(f"No se encontraron zonas críticas (>= 65%) para la hora {hora_animada}:00.")
-        else:
-            st.success(f"Mostrando {len(df_hotspots_hora_actual)} zonas críticas para la hora {hora_animada}:00.")
-            with st.expander("Ver detalles de las zonas críticas para esta hora"):
-                st.dataframe(df_hotspots_hora_actual[['probabilidad', 'calle', 'lat', 'lon']])
+        map_col, info_col = st.columns([3, 2])
+        with map_col:
+            st.pydeck_chart(pdk.Deck(
+                layers=[alcaldias_layer_pred, hotspots_layer],
+                initial_view_state=view_state,
+                map_style=map_style_choice,
+                tooltip=tooltip
+            ))
+        
+        with info_col:
+            if total_disponibles == 0:
+                st.info(f"No se generaron predicciones para la hora {hora_animada}:00.")
+            elif total_sobre_umbral == 0:
+                st.warning(f"Todas las {total_disponibles} zonas quedan por debajo del {min_prob_display}%.")
+            elif total_mostrados == 0:
+                st.warning("Reduce el umbral o aumenta el máximo de zonas para visualizar resultados.")
+            else:
+                probs = df_hotspots_visibles['probabilidad_num']
+                radio_prom = df_hotspots_visibles['radius'].mean()
+                metric_col1, metric_col2, metric_col3 = st.columns(3)
+                metric_col1.metric("Sobre umbral", total_sobre_umbral)
+                metric_col2.metric("En el mapa", total_mostrados)
+                metric_col3.metric("Máxima probabilidad", f"{probs.max():.1f}%")
+                st.caption(f"Mostrando las {total_mostrados} zonas más críticas (de {total_sobre_umbral} sobre el umbral).")
+                
+                metric_col4, metric_col5 = st.columns(2)
+                metric_col4.metric("Radio promedio", f"{radio_prom:.0f} m")
+                metric_col5.metric("Promedio de riesgo", f"{probs.mean():.1f}%")
+                
+                st.markdown("**Top zonas críticas**")
+                st.dataframe(
+                    df_hotspots_visibles[["probabilidad", "calle", "hora_proyectada", "lat", "lon"]],
+                    use_container_width=True,
+                    hide_index=True
+                )
+                
+                st.markdown("**Leyenda rápida**")
+                st.markdown("🔵 <65% • 🟢 65‑75% • 🟡 75‑85% • 🔴 85%+")
     
-    elif "df_simulacion_completa" in st.session_state:
-        st.info("La simulación no generó zonas críticas (>= 65%) para esta combinación de filtros.")
+    else:
+        st.info("Genera una simulación para visualizar las zonas críticas en el mapa.")

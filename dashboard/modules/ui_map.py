@@ -12,6 +12,7 @@ from streamlit_folium import st_folium
 import mapa
 from unidecode import unidecode
 from .data import get_all_alcaldias, get_all_crime_categories, run_query
+from .location_utils import enrich_cluster_locations
 
 # =========================
 # RUTAS GLOBALES (ajusta si hace falta)
@@ -20,6 +21,7 @@ BASE_PATH = Path(__file__).parent.parent
 
 ALL_YEARS_OPTION = "Todo el histórico"
 DEFAULT_MAP_YEAR = 2024
+HOTSPOT_CACHE_VERSION = "1.0"
 
 
 # --- 1. Carga de Modelos y Datos (V3) ---
@@ -47,6 +49,7 @@ def load_models_and_data():
     # Info de clusters pre-calculados
     try:
         df_clusters = pd.read_csv(base_path / 'cluster_info.csv')
+        df_clusters = enrich_cluster_locations(df_clusters)
     except FileNotFoundError:
         st.error("Error: 'cluster_info.csv' no encontrado. Ejecuta 'crear_cluster_info.py' primero.")
         df_clusters = None
@@ -112,7 +115,6 @@ def get_available_years() -> List[int]:
     )
     return years
 
-
 @st.cache_data(show_spinner=False, ttl=3600)
 def load_duckdb_map_data(year_filter: Optional[int] = None):
     """
@@ -158,6 +160,34 @@ def load_duckdb_map_data(year_filter: Optional[int] = None):
         df[f"{col}_N"] = _normalize_series(df[col])
 
     return df.reset_index(drop=True)
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def load_cached_historical_dataset():
+    """
+    Recupera el dataset tradicional usado por mapa.py cuando DuckDB no está disponible.
+    Se cachea para evitar volver a leer/limpiar los CSVs pesados en cada rerun.
+    """
+    try:
+        return mapa.load_and_clean_raw_data()
+    except AttributeError:
+        st.error("El módulo 'mapa' no expone load_and_clean_raw_data().")
+    except Exception as exc:
+        st.error(f"No se pudo recuperar el dataset histórico tradicional: {exc}")
+    return pd.DataFrame()
+def _get_hotspot_cache():
+    """Ensure a session-level cache for predictive hotspots exists."""
+    if 'ui_map_hotspot_cache' not in st.session_state:
+        st.session_state.ui_map_hotspot_cache = {}
+    return st.session_state.ui_map_hotspot_cache
+
+
+def _build_hotspot_cache_key(alcaldia: str, categoria: str, fecha, hora: int) -> str:
+    """Normalized cache key to reuse hotspot predictions."""
+    date_str = pd.to_datetime(fecha).strftime("%Y-%m-%d")
+    al_norm = unidecode(str(alcaldia or "ALL")).upper()
+    cat_norm = unidecode(str(categoria or "ALL")).upper()
+    return f"{HOTSPOT_CACHE_VERSION}|{al_norm}|{cat_norm}|{date_str}|{int(hora)}"
 
 
 # --- 2. Funciones de Preprocessing (V3) ---
@@ -270,7 +300,10 @@ def render():
     st.caption(f"Registros cargados: {len(df_mapa):,} ({label_caption}).")
     if df_mapa.empty:
         st.warning("No se pudieron cargar los datos del mapa desde DuckDB. Se utilizará el método tradicional.")
-        mapa.render_interactive_map(embed=True)
+        fallback_df = load_cached_historical_dataset()
+        fallback_caption = f"{len(fallback_df):,} registros cacheados" if not fallback_df.empty else "sin datos disponibles"
+        st.caption(f"Dataset histórico (cacheado): {fallback_caption}.")
+        mapa.render_interactive_map(embed=True, df_crime=fallback_df if not fallback_df.empty else None)
     else:
         mapa.render_interactive_map(embed=True, df_crime=df_mapa)
 
@@ -326,7 +359,8 @@ def render():
             )
 
         # --- Lógica de Predicción en Tiempo Real (V3) ---
-        hotspots = []
+        df_hotspots = pd.DataFrame()
+        cache_hit = False
 
         if (
             df_clusters is not None and
@@ -336,40 +370,55 @@ def render():
             model_xgb is not None and
             model_kmeans is not None
         ):
-            clusters_filtrados = df_clusters[df_clusters['alcaldia_comun'].str.upper() == map_alcaldia.upper()]
+            cache_store = _get_hotspot_cache()
+            cache_key = _build_hotspot_cache_key(map_alcaldia, map_categoria, map_fecha, map_hora)
+            cached_result = cache_store.get(cache_key)
 
-            if clusters_filtrados.empty:
-                st.warning(f"No se encontraron zonas de clúster pre-calculadas para **{map_alcaldia}**.")
+            if cached_result is not None:
+                df_hotspots = cached_result.copy()
+                cache_hit = True
             else:
-                for _, cluster in clusters_filtrados.iterrows():
-                    try:
-                        input_df = preprocess_inputs_mapa_v3(
-                            map_fecha,
-                            map_hora,
-                            cluster['latitud'],
-                            cluster['longitud'],
-                            cluster['alcaldia_comun'],
-                            map_categoria,
-                            model_kmeans
-                        )
+                hotspots = []
+                clusters_filtrados = df_clusters[df_clusters['alcaldia_comun'].str.upper() == map_alcaldia.upper()]
 
-                        probability = model_xgb.predict_proba(input_df)
-                        prob_violento = probability[0][1]
+                if clusters_filtrados.empty:
+                    st.warning(f"No se encontraron zonas de clúster pre-calculadas para **{map_alcaldia}**.")
+                else:
+                    for _, cluster in clusters_filtrados.iterrows():
+                        try:
+                            location_label = (
+                                cluster.get('cluster_label')
+                                or cluster.get('calle_cercana')
+                                or "Ubicación sin referencia"
+                            )
+                            input_df = preprocess_inputs_mapa_v3(
+                                map_fecha,
+                                map_hora,
+                                cluster['latitud'],
+                                cluster['longitud'],
+                                cluster['alcaldia_comun'],
+                                map_categoria,
+                                model_kmeans
+                            )
 
-                        if prob_violento >= 0.65:
-                            hotspots.append({
-                                'lat': cluster['latitud'],
-                                'lon': cluster['longitud'],
-                                'probabilidad_val': prob_violento,
-                                'probabilidad': f"{prob_violento * 100:.1f}%",
-                                'calle': cluster['calle_cercana'],
-                                'radius': 200 + (prob_violento * 800)
-                            })
-                    except Exception:
-                        # Silenciar errores por cluster individual
-                        pass
+                            probability = model_xgb.predict_proba(input_df)
+                            prob_violento = probability[0][1]
 
-        df_hotspots = pd.DataFrame(hotspots)
+                            if prob_violento >= 0.65:
+                                hotspots.append({
+                                    'lat': cluster['latitud'],
+                                    'lon': cluster['longitud'],
+                                    'probabilidad_val': prob_violento,
+                                    'probabilidad': f"{prob_violento * 100:.1f}%",
+                                    'calle': location_label,
+                                    'radius': 200 + (prob_violento * 800)
+                                })
+                        except Exception:
+                            # Silenciar errores por cluster individual
+                            pass
+
+                df_hotspots = pd.DataFrame(hotspots)
+                cache_store[cache_key] = df_hotspots.copy()
 
         # Crear mapa base Folium para predicción
         m_pred = folium.Map(
@@ -396,6 +445,9 @@ def render():
         ).add_to(m_pred)
 
         # Añadir hotspots como círculos
+        if cache_hit:
+            st.caption("Predicciones recuperadas del caché local para agilizar la visualización.")
+
         if not df_hotspots.empty:
             for _, row in df_hotspots.iterrows():
                 color = get_color_from_probability(row['probabilidad_val'])
