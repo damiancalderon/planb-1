@@ -331,8 +331,8 @@ def donut_chart(df, field, count_col, *, title="", colors=None, width=700, heigh
         theta=alt.Theta(f"{count_col}:Q"),
         color=alt.Color(f"{field}:N", scale=alt.Scale(range=colors)),
         tooltip=[
-            alt.Tooltip(f"{field}:N", title="Category"),
-            alt.Tooltip(f"{count_col}:Q", title="Count"),
+            alt.Tooltip(f"{field}:N", title="Categoría"),
+            alt.Tooltip(f"{count_col}:Q", title="Conteo"),
         ],
     ).properties(title=title)
 
@@ -346,7 +346,7 @@ def heatmap_chart(df, x, y, z, *, title="", width=700, height=350, x_axis=None, 
 
 # =================== RENDER ===================
 def render():
-    st.title("Exploratory Data Analysis (EDA)")
+    st.title("Análisis Exploratorio de Datos (AED)")
 
     # Carga TODO (sin límite por defecto)
     base_df = load_info_df(year_min=2015, limit=None)
@@ -414,7 +414,7 @@ def render():
         else:
             delito_default = []
         delito_sel = st.multiselect(
-            "Delitos (Top 30 por defecto)", options=dels, default=delito_default
+            "Delitos (30 principales por defecto)", options=dels, default=delito_default
         )
 
         if st.button("🔄 Reset filtros"):
@@ -621,7 +621,7 @@ def render():
                 agg["col_counts"],
                 "colonia",
                 "count",
-                title="Top 10 Colonias por Incidentes",
+                title="10 colonias con más incidentes",
                 color=THEME_PALETTE[4],
                 x_axis=_axis("Número de casos"),
                 y_axis=_axis("Colonia", orient="left"),
@@ -633,7 +633,7 @@ def render():
             agg["del_counts"],
             "delito",
             "count",
-            title="Top 10 Delitos por Frecuencia",
+            title="10 delitos con mayor frecuencia",
             color=THEME_PALETTE[5],
             x_axis=_axis("Número de casos"),
             y_axis=_axis("Tipo de delito", orient="left"),

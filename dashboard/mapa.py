@@ -235,30 +235,30 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
     _init_session_state()
 
     if not embed:
-        st.title("🗺️ CDMX Crime Intelligence Platform")
+        st.title("🗺️ Plataforma de Inteligencia Delictiva CDMX")
         st.markdown(
             """
-            Welcome to the interactive crime visualization tool for Mexico City.
-            This platform allows for in-depth analysis through dynamic filtering,
-            layered data visualization, and interactive map controls.
-            Use the sidebar to customize your analysis, search for locations, and discover points of interest.
+            Bienvenido a la herramienta interactiva de visualización delictiva para la Ciudad de México.
+            Esta plataforma permite un análisis profundo con filtros dinámicos,
+            visualizaciones por capas y controles interactivos del mapa.
+            Usa la barra lateral para personalizar tu análisis, buscar ubicaciones y descubrir puntos de interés.
             """
         )
 
     df_crime = df_crime if df_crime is not None else load_and_clean_raw_data()
     alcaldias_geojson = load_geojson(ALCALDIAS_GEOJSON_PATH)
 
-    st.sidebar.header("⚙️ Map Filters & Controls")
+    st.sidebar.header("⚙️ Controles y filtros del mapa")
 
-    with st.sidebar.expander("Nominatim Search & POI Finder", expanded=True):
-        address_query = st.text_input("Search for Address or Landmark:", placeholder="e.g., Palacio de Bellas Artes")
-        if st.button("Search", use_container_width=True):
+    with st.sidebar.expander("Búsqueda Nominatim y puntos de interés", expanded=True):
+        address_query = st.text_input("Buscar dirección o punto de referencia:", placeholder="Ej.: Palacio de Bellas Artes")
+        if st.button("Buscar", use_container_width=True):
             if address_query:
                 search_tuple = dp.geocode_address(address_query)
 
                 if search_tuple[0] is None:
                     st.session_state.search_result = None
-                    st.warning("Location not found. Please try a different query.")
+                    st.warning("No se encontró la ubicación. Intenta con otra consulta.")
                 else:
                     class MockLocation:
                         def __init__(self, lat, lon, address):
@@ -273,73 +273,49 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
                 st.session_state.search_result = None
 
         st.markdown("---")
-        poi_query = st.text_input("Find Nearby Points of Interest:", placeholder="e.g., Police, Hospital, Museum")
-        if st.button("Find POIs", use_container_width=True):
+        poi_query = st.text_input("Encontrar puntos de interés cercanos:", placeholder="Ej.: Policía, Hospital, Museo")
+        if st.button("Buscar PDI", use_container_width=True):
             if poi_query:
                 cdmx_viewbox = ((19.59, -99.36), (19.12, -98.94))
                 st.session_state.poi_results[poi_query] = find_pois(poi_query, viewbox=cdmx_viewbox)
                 if not st.session_state.poi_results[poi_query]:
-                    st.warning(f"No results found for '{poi_query}' in CDMX.")
+                    st.warning(f"No se encontraron resultados para '{poi_query}' en la CDMX.")
 
         if st.session_state.poi_results:
-            if st.button("Clear POI Layers", use_container_width=True):
+            if st.button("Limpiar capas de PDI", use_container_width=True):
                 st.session_state.poi_results = {}
                 st.rerun()
 
-    with st.sidebar.expander("Filter by Crime & Time", expanded=True):
+    with st.sidebar.expander("Filtrar por delito y tiempo", expanded=True):
         if not df_crime.empty:
             delitos_unicos = sorted(df_crime['delito_N'].unique())
-            select_all_crimes = st.checkbox("Select All Crime Types", True)
+            select_all_crimes = st.checkbox("Seleccionar todos los tipos de delito", True)
             if select_all_crimes:
-                selected_delitos = st.multiselect('Filter by Crime Type:', delitos_unicos, default=delitos_unicos)
+                selected_delitos = st.multiselect('Filtrar por tipo de delito:', delitos_unicos, default=delitos_unicos)
             else:
-                selected_delitos = st.multiselect('Filter by Crime Type:', delitos_unicos, default=delitos_unicos[:3])
+                selected_delitos = st.multiselect('Filtrar por tipo de delito:', delitos_unicos, default=delitos_unicos[:3])
 
             min_date, max_date = df_crime['datetime'].min().date(), df_crime['datetime'].max().date()
             selected_date_range = st.date_input(
-                "Filter by Date Range:", value=(min_date, max_date), min_value=min_date, max_value=max_date
+                "Filtrar por rango de fechas:", value=(min_date, max_date), min_value=min_date, max_value=max_date
             )
 
             selected_time_range = st.slider(
-                "Filter by Hour of Day:", value=(time(0, 0), time(23, 59)), format="HH:mm"
+                "Filtrar por hora del día:", value=(time(0, 0), time(23, 59)), format="HH:mm"
             )
         else:
-            st.sidebar.warning("Crime data could not be loaded. Filtering is disabled.")
+            st.sidebar.warning("No fue posible cargar los datos delictivos. Los filtros están deshabilitados.")
             selected_delitos, selected_date_range, selected_time_range = [], [], []
 
-    with st.sidebar.expander("Toggle Map Layers", expanded=True):
-        show_alcaldias = st.toggle("Show Alcaldías Boundaries", True)
-        show_heatmap = st.toggle("Show Crime Heatmap", True)
-        show_markers = st.toggle("Show Individual Crime Points", True)
-
-    with st.sidebar.expander("Animated Playback (beta)", expanded=False):
-        enable_timelapse = st.checkbox(
-            "Enable Playable Timeline",
-            value=False,
-            help="Construye una animación por periodos para reproducir la evolución temporal.",
-        )
-        if enable_timelapse:
-            freq_labels = list(_TIMELINE_FREQ_OPTIONS.keys())
-            timeline_freq_label = st.selectbox(
-                "Bucket temporal",
-                options=freq_labels,
-                index=freq_labels.index("Daily") if "Daily" in freq_labels else 0,
-            )
-            timeline_max_frames = st.slider(
-                "Número máximo de fotogramas",
-                min_value=5,
-                max_value=120,
-                value=40,
-                help="Controla cuántos pasos tendrá la animación para evitar mapas saturados.",
-            )
-        else:
-            timeline_freq_label = None
-            timeline_max_frames = 0
+    with st.sidebar.expander("Capas del mapa", expanded=True):
+        show_alcaldias = st.toggle("Mostrar límites de alcaldías", True)
+        show_heatmap = st.toggle("Mostrar mapa de calor delictivo", True)
+        show_markers = st.toggle("Mostrar puntos individuales de delitos", True)
 
     if show_heatmap:
-        with st.sidebar.expander("Customize Heatmap"):
-            heatmap_radius = st.slider("Heatmap Radius", 5, 30, 15)
-            heatmap_blur = st.slider("Heatmap Blur", 5, 30, 10)
+        with st.sidebar.expander("Personalizar mapa de calor"):
+            heatmap_radius = st.slider("Radio del mapa de calor", 5, 30, 15)
+            heatmap_blur = st.slider("Difuminado del mapa de calor", 5, 30, 10)
     else:
         heatmap_radius = heatmap_blur = None
 
@@ -364,7 +340,7 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
         crime_counts.columns = ['alcaldia', 'crime_count']
         max_count = crime_counts['crime_count'].max()
         colormap = cm.linear.YlOrRd_09.scale(0, max_count if max_count > 0 else 1)
-        colormap.caption = 'Crime Count in Selected Period'
+        colormap.caption = 'Conteo de delitos en el periodo seleccionado'
         colormap.width = 800  # make legend bar wider for readability
         colormap.length = 10000  # increase length so color gradations are clearer
         m.add_child(colormap)
@@ -373,7 +349,7 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
         if show_alcaldias:
             folium.GeoJson(
                 alcaldias_geojson,
-                name='Alcaldías Crime Density',
+                name='Densidad delictiva por alcaldía',
                 style_function=lambda feature: {
                     'fillColor': colormap(
                         crime_counts.loc[
@@ -390,16 +366,13 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
                 highlight_function=lambda x: {'weight': 3, 'color': 'yellow'}
             ).add_to(m)
 
-    timeline_layers_added = False
-    timeline_note = None
-
     if not df_filtered.empty:
         if show_heatmap:
             heat_data = [[row['latitud'], row['longitud']] for _, row in df_filtered.iterrows()]
-            HeatMap(heat_data, radius=heatmap_radius, blur=heatmap_blur, name="Crime Heatmap").add_to(m)
+            HeatMap(heat_data, radius=heatmap_radius, blur=heatmap_blur, name="Mapa de calor delictivo").add_to(m)
 
         if show_markers:
-            marker_cluster = MarkerCluster(name="Crime Incidents").add_to(m)
+            marker_cluster = MarkerCluster(name="Incidentes delictivos").add_to(m)
             for _, row in df_filtered.head(1000).iterrows():
                 popup_html = f"<b>Delito:</b> {row['delito_N']}<br><b>Fecha:</b> {row['datetime'].strftime('%Y-%m-%d %H:%M')}"
                 folium.Marker(
@@ -408,55 +381,12 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
                     icon=folium.Icon(color="purple", icon="info-sign")
                 ).add_to(marker_cluster)
 
-    if enable_timelapse and timeline_freq_label and not df_filtered.empty:
-        freq_meta = _TIMELINE_FREQ_OPTIONS[timeline_freq_label]
-        heatmap_frames, frame_labels, sliced_df, timeline_truncated = _prepare_timelapse_payload(
-            df_filtered,
-            timeline_freq_label,
-            timeline_max_frames,
-        )
-
-        if heatmap_frames:
-            TimelineHeatMap(
-                data=heatmap_frames,
-                index=frame_labels,
-                auto_play=False,
-                max_opacity=0.8,
-                radius=heatmap_radius or 15,
-                use_local_extrema=True,
-                name="Heatmap Timeline",
-                display_index=True,
-            ).add_to(m)
-            timeline_layers_added = True
-
-        geojson_payload = _build_timestamped_geojson(sliced_df, TIMELINE_POINT_LIMIT)
-        if geojson_payload:
-            TimestampedGeoJson(
-                data=geojson_payload,
-                period=freq_meta['period'],
-                duration=freq_meta['period'],
-                transition_time=400,
-                auto_play=False,
-                loop=False,
-                add_last_point=True,
-            ).add_to(m)
-            timeline_layers_added = True
-
-        if not timeline_layers_added:
-            timeline_note = "La animación no pudo generarse con los datos filtrados."
-        elif timeline_truncated:
-            timeline_note = "Timeline truncada para mantener el rendimiento."
-    elif enable_timelapse and not df_filtered.empty:
-        timeline_note = "Selecciona un bucket temporal para activar la animación."
-    elif enable_timelapse and df_filtered.empty:
-        timeline_note = "No hay datos filtrados para generar la animación."
-
     if st.session_state.search_result:
         loc = st.session_state.search_result
         folium.Marker(
             location=[loc.latitude, loc.longitude],
-            popup=f"<b>Search Result:</b><br>{loc.address}",
-            tooltip="Your Searched Location",
+            popup=f"<b>Resultado de búsqueda:</b><br>{loc.address}",
+            tooltip="Ubicación buscada",
             icon=folium.Icon(color='green', icon='search')
         ).add_to(m)
         m.location = [loc.latitude, loc.longitude]
@@ -464,7 +394,7 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
 
     if st.session_state.poi_results:
         for query, pois in st.session_state.poi_results.items():
-            poi_fg = folium.FeatureGroup(name=f"POIs: {query.title()}", show=True)
+            poi_fg = folium.FeatureGroup(name=f"Puntos de interés: {query.title()}", show=True)
             for poi in pois:
                 folium.Marker(
                     location=[poi.latitude, poi.longitude],
@@ -474,9 +404,6 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
                 ).add_to(poi_fg)
             poi_fg.add_to(m)
 
-    if timeline_note:
-        st.caption(f"ℹ️ {timeline_note}")
-
     Fullscreen(position="topleft").add_to(m)
     MeasureControl(position="bottomleft", primary_length_unit="kilometers").add_to(m)
     folium.LayerControl().add_to(m)
@@ -484,13 +411,13 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Total Crimes in Selection", f"{len(df_filtered):,}")
+        st.metric("Delitos totales en la selección", f"{len(df_filtered):,}")
     with col2:
         top_crime = df_filtered['delito_N'].mode()[0] if not df_filtered.empty else "N/A"
-        st.metric("Most Frequent Crime", top_crime)
+        st.metric("Delito más frecuente", top_crime)
     with col3:
         top_alcaldia = df_filtered['alcaldia_hecho_N'].mode()[0] if not df_filtered.empty else "N/A"
-        st.metric("Busiest Alcaldía", top_alcaldia)
+        st.metric("Alcaldía con más casos", top_alcaldia)
 
     map_output = st_folium(m, height=600, width='stretch')
 
@@ -498,13 +425,13 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
         clicked_lat = map_output["last_clicked"]["lat"]
         clicked_lon = map_output["last_clicked"]["lng"]
         address = dp.reverse_geocode_coords(clicked_lat, clicked_lon)
-        st.session_state.last_clicked_address = address or "Could not fetch address."
+        st.session_state.last_clicked_address = address or "No se pudo obtener la dirección."
 
     if st.session_state.last_clicked_address:
-        st.info(f"📍 Address of Last Clicked Point: {st.session_state.last_clicked_address}")
+        st.info(f"📍 Dirección del último punto seleccionado: {st.session_state.last_clicked_address}")
 
     st.markdown("---")
-    st.header("Filtered Data Explorer")
+    st.header("Explorador de datos filtrados")
 
     expected_cols = ['datetime', 'delito_N', 'alcaldia_hecho_N', 'colonia_hecho_N']
     if not df_filtered.empty:
@@ -513,12 +440,12 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
         display_df = pd.DataFrame(columns=expected_cols)
 
     st.dataframe(display_df, use_container_width=True)
-    st.caption(f"Showing the first 1,000 rows of {len(df_filtered):,} total records in your selection.")
+    st.caption(f"Mostrando las primeras 1,000 filas de un total de {len(df_filtered):,} registros en tu selección.")
 
 
 if __name__ == "__main__":
     st.set_page_config(
-        page_title="CDMX Crime Intelligence Platform",
+        page_title="Plataforma de Inteligencia Delictiva CDMX",
         page_icon="🗺️",
         layout="wide",
     )

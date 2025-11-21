@@ -253,7 +253,7 @@ def render():
     """
     Función principal que renderiza toda la página de Alerta Predictiva.
     """
-    st.title("🛡️ Sistema de Alerta Predictiva y Análisis de IA")
+    st.title("Sistema de Alerta Predictiva y Análisis de IA")
     
     model_xgb, model_kmeans, df_clusters, df_alcaldias, df_categorias, geojson_data = load_models_and_data()
     
@@ -364,7 +364,7 @@ def render():
                     st.session_state.chat_history.append({"role": "assistant", "content": response})
 
     st.divider()
-    st.header("3. Simulación de Hotspots Futuros (Próximas 48h)")
+    st.header("3. Simulación de Zonas de Riesgo Futuras (Próximas 48h)")
     st.markdown("Selecciona los parámetros y genera una simulación. Luego usa el slider de 'Hora' para animar la predicción.")
 
     col_map_1, col_map_2 = st.columns(2)
@@ -427,12 +427,11 @@ def render():
         ))
 
         if df_hotspots_hora_actual.empty:
-            st.info(f"No se encontraron hotspots (>= 65%) para la hora {hora_animada}:00.")
+            st.info(f"No se encontraron zonas críticas (>= 65%) para la hora {hora_animada}:00.")
         else:
-            st.success(f"Mostrando {len(df_hotspots_hora_actual)} hotspots para la hora {hora_animada}:00.")
-            with st.expander("Ver detalles de los hotspots para esta hora"):
+            st.success(f"Mostrando {len(df_hotspots_hora_actual)} zonas críticas para la hora {hora_animada}:00.")
+            with st.expander("Ver detalles de las zonas críticas para esta hora"):
                 st.dataframe(df_hotspots_hora_actual[['probabilidad', 'calle', 'lat', 'lon']])
     
     elif "df_simulacion_completa" in st.session_state:
-        st.info("La simulación no generó hotspots (>= 65%) para esta combinación de filtros.")
-
+        st.info("La simulación no generó zonas críticas (>= 65%) para esta combinación de filtros.")

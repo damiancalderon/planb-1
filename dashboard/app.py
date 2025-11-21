@@ -7,7 +7,7 @@ from modules import ui_home, ui_analysis, ui_info, ui_ourteam, ui_alerts, ui_map
 
 # --- Configuración de página (debe ir antes de cualquier render) ---
 st.set_page_config(
-    page_title="CDMX Crime Intelligence Platform",
+    page_title="Plataforma de Inteligencia Delictiva CDMX",
     page_icon="🗺",
     layout="wide",
     initial_sidebar_state="collapsed" # Mantenemos colapsado
@@ -144,7 +144,7 @@ def render_main_dashboard():
 
     # 2. Router de páginas (Llamada a los módulos de renderizado)
     # Muestra el título del dashboard solo cuando el usuario está logueado
-    st.title(f"{page} - {st.session_state.user} View")
+    st.title(f"{page} - Vista de {st.session_state.user}")
 
     try:
         # CORRECCIÓN: Los nombres de las páginas deben coincidir exactamente con los elementos de la lista PAGES_...

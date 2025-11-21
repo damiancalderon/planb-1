@@ -51,7 +51,7 @@ def get_absolute_path(relative_path: str) -> Path:
 
 
 def render():
-    st.set_page_config(page_title="CDMX: From Incidents to Insights", layout="wide")
+    st.set_page_config(page_title="CDMX: De incidentes a conclusiones", layout="wide")
 
     # ======================
     # Estilos globales combinados
@@ -190,9 +190,9 @@ def render():
     # ======================
     st.markdown(
         """
-        <h1 class="hero-title">CDMX: From Incidents to Insights</h1>
+        <h1 class="hero-title">CDMX: De incidentes a conclusiones</h1>
         <div class="hero-sub">
-            Discover patterns, visualize trends, and explore insights about urban safety across Mexico City.
+            Descubre patrones, visualiza tendencias y explora hallazgos sobre la seguridad urbana en toda la Ciudad de México.
         </div>
         """,
         unsafe_allow_html=True,
@@ -306,7 +306,7 @@ def render():
         unsafe_allow_html=True
     )
     st.markdown(
-        "<p style='text-align:center; color:#C9D1D9; margin-bottom:20px;'>Top 5 alcaldías con más delitos acumulados</p>",
+        "<p style='text-align:center; color:#C9D1D9; margin-bottom:20px;'>5 alcaldías con más delitos acumulados</p>",
         unsafe_allow_html=True
     )
 
@@ -350,7 +350,7 @@ def render():
 
     # KPI 2: Insights Gemini
     with colI2:
-        st.subheader("🤖 Insights del Analista IA (Gemini)")
+        st.subheader("🤖 Conclusiones del Analista IA (Gemini)")
 
         if top_alcaldias_df is not None and not top_alcaldias_df.empty:
             tabla_top = top_alcaldias_df.to_string(index=False)
@@ -359,7 +359,7 @@ def render():
 
         contexto_string = f"""
         - Promedio de Crímenes Diarios: {promedio_diario}
-        - Zonas (Alcaldías) más afectadas (Top 5): 
+        - Zonas (Alcaldías) más afectadas (5 principales): 
         {tabla_top}
         """
 
@@ -426,7 +426,7 @@ def render():
     )
 
     # Créditos finales
-    st.caption("This platform combines machine learning, geospatial analysis, and open data to support data-driven safety strategies.")
+    st.caption("Esta plataforma combina aprendizaje automático, análisis geoespacial y datos abiertos para respaldar estrategias de seguridad basadas en evidencia.")
 
 
 if __name__ == "__main__":
