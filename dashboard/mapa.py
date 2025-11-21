@@ -26,6 +26,20 @@ import data_processing as dp
 BASE_PATH = Path(__file__).resolve().parent
 ALCALDIAS_GEOJSON_PATH = BASE_PATH / "alcaldias.geojson"
 TIMELINE_POINT_LIMIT = 2500
+SPANISH_MONTHS = [
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+]
 
 
 _TIMELINE_FREQ_OPTIONS = {
@@ -34,6 +48,26 @@ _TIMELINE_FREQ_OPTIONS = {
     "Weekly": {"freq": "W", "label_fmt": "Semana %W - %Y", "period": "P1W"},
     "Monthly": {"freq": "M", "label_fmt": "%b %Y", "period": "P1M"},
 }
+
+
+def format_spanish_datetime(value, include_time: bool = True) -> str:
+    """Format a datetime-like value using Spanish month names."""
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return ""
+
+    ts = pd.to_datetime(value, errors="coerce")
+    if pd.isna(ts):
+        return ""
+
+    try:
+        month_name = SPANISH_MONTHS[ts.month - 1]
+    except IndexError:
+        month_name = ""
+
+    base = f"{ts.day:02d} {month_name} {ts.year}".strip()
+    if include_time:
+        return f"{base} {ts.strftime('%H:%M')}".strip()
+    return base
 
 
 class LegendTickFormatter(MacroElement):
@@ -152,7 +186,7 @@ def _build_timestamped_geojson(df: pd.DataFrame, max_points: int = TIMELINE_POIN
         popup = (
             f"<b>Delito:</b> {row.get('delito_N', 'N/D')}<br>"
             f"<b>Alcaldía:</b> {row.get('alcaldia_hecho_N', 'N/D')}<br>"
-            f"<b>Fecha:</b> {row['datetime'].strftime('%d-%m-%Y %H:%M')}"
+            f"<b>Fecha:</b> {format_spanish_datetime(row['datetime'])}"
         )
         features.append({
             "type": "Feature",
@@ -350,7 +384,10 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
         if show_markers:
             marker_cluster = MarkerCluster(name="Incidentes delictivos").add_to(m)
             for _, row in df_filtered.head(1000).iterrows():
-                popup_html = f"<b>Delito:</b> {row['delito_N']}<br><b>Fecha:</b> {row['datetime'].strftime('%d-%m-%Y %H:%M')}"
+                popup_html = (
+                    f"<b>Delito:</b> {row['delito_N']}"
+                    f"<br><b>Fecha:</b> {format_spanish_datetime(row['datetime'])}"
+                )
                 folium.Marker(
                     location=[row['latitud'], row['longitud']],
                     popup=popup_html,
@@ -404,7 +441,7 @@ def render_interactive_map(embed: bool = False, df_crime: Optional[pd.DataFrame]
         display_df = pd.DataFrame(columns=expected_cols)
 
     if not display_df.empty and 'datetime' in display_df:
-        display_df['datetime'] = display_df['datetime'].dt.strftime('%d-%m-%Y %H:%M')
+        display_df['datetime'] = display_df['datetime'].apply(format_spanish_datetime)
 
     st.dataframe(display_df, use_container_width=True)
     st.caption(f"Mostrando las primeras 1,000 filas de un total de {len(df_filtered):,} registros en tu selección.")
