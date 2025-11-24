@@ -2,7 +2,6 @@ import streamlit as st
 from pathlib import Path
 
 # 🔹 NUEVOS IMPORTS PARA INSIGHTS
-import plotly.express as px
 import database  # Módulo de base de datos
 import requests  # Para llamar a n8n
 import json
@@ -51,7 +50,7 @@ def get_absolute_path(relative_path: str) -> Path:
 
 
 def render():
-    st.set_page_config(page_title="CDMX: De incidentes a conclusiones", layout="wide")
+    st.set_page_config(page_title="CDMX: From incidents to insights", layout="wide")
 
     # ======================
     # Estilos globales combinados
@@ -190,7 +189,7 @@ def render():
     # ======================
     st.markdown(
         """
-        <h1 class="hero-title">CDMX: De incidentes a conclusiones</h1>
+        <h1 class="hero-title">CDMX: From incidents to insights</h1>
         <div class="hero-sub">
             Descubre patrones, visualiza tendencias y explora hallazgos sobre la seguridad urbana en toda la Ciudad de México.
         </div>
@@ -216,9 +215,6 @@ def render():
 
     st.divider()
 
-   
-    st.divider()
-
     # ======================
     # Carga de datos para KPIs / Insights
     # ======================
@@ -230,6 +226,8 @@ def render():
 
     try:
         tendency_df = database.get_historical_tendency()
+        if tendency_df is not None and not tendency_df.empty:
+            st.session_state["historical_tendency_df"] = tendency_df.copy()
     except Exception as e:
         st.error(f"Error al cargar tendency_df: {e}")
         tendency_df = None
@@ -366,29 +364,6 @@ def render():
         with st.spinner("Gemini está analizando los datos..."):
             insights = call_gemini_insights(contexto_string)
             st.info(insights)
-
- # KPI 3: Contexto Clave
-
-    if tendency_df is not None and not tendency_df.empty:
-        if "fecha" in tendency_df.columns and "total_delitos" in tendency_df.columns:
-            fig = px.line(
-                tendency_df,
-                x="fecha",
-                y="total_delitos",
-                title="Tendencia histórica de delitos",
-            )
-            fig.update_layout(
-                template="plotly_dark",
-                xaxis_title="Fecha",
-                yaxis_title="Total de Delitos",
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.warning(
-                "El DataFrame de tendencia no contiene las columnas 'fecha' y 'total_delitos'."
-            )
-    else:
-        st.warning("No se pudieron cargar los datos de tendencia.")
 
     # Ocultar "Made with Streamlit"
     hide_streamlit_style = """
