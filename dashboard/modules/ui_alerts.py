@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, timedelta
 
 import database
@@ -25,6 +26,16 @@ st.set_page_config(page_title="Alerta Policial", page_icon="🛡️", layout="wi
 
 # --- 1. URL del Webhook de n8n ---
 N8N_WEBHOOK_URL = "https://n8n.tektititc.org/webhook/90408216-1fba-4806-b062-2ab8afb30fea"
+
+# --- Configuración de map tiles (Mapbox opcional) ---
+MAPBOX_API_KEY = st.secrets.get("MAPBOX_API_KEY") or os.environ.get("MAPBOX_API_KEY")
+if MAPBOX_API_KEY:
+    pdk.settings.mapbox_api_key = MAPBOX_API_KEY
+    MAP_PROVIDER = "mapbox"
+    MAP_STYLE = "mapbox://styles/mapbox/dark-v9"
+else:
+    MAP_PROVIDER = "carto"
+    MAP_STYLE = "dark"
 
 # --- 2. Carga de Modelos y Datos ---
 @st.cache_resource
@@ -465,12 +476,16 @@ def render():
         
         map_col, info_col = st.columns([3, 2])
         with map_col:
-            st.pydeck_chart(pdk.Deck(
+            deck = pdk.Deck(
                 layers=[alcaldias_layer_pred, hotspots_layer],
                 initial_view_state=view_state,
-                map_style="mapbox://styles/mapbox/dark-v9",
+                map_style=MAP_STYLE,
+                map_provider=MAP_PROVIDER,
                 tooltip=tooltip
-            ))
+            )
+            st.pydeck_chart(deck)
+            if MAP_PROVIDER != "mapbox":
+                st.caption("Mapa base CARTO por defecto. Define MAPBOX_API_KEY en secrets/env para Mapbox Dark.")
         
         with info_col:
             if total_disponibles == 0:
