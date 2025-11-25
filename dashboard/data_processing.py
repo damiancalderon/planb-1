@@ -1,4 +1,5 @@
 import pandas as pd
+import duckdb
 from unidecode import unidecode
 import geopandas as gpd
 from shapely.geometry import Point
@@ -19,24 +20,37 @@ def load_data():
   base_dir = Path(__file__).resolve().parent
   candidate_dirs = [base_dir, base_dir / "data"]
 
-  def resolve_path(filename):
+  def resolve_path(filename, optional=False):
     for directory in candidate_dirs:
       file_path = directory / filename
       if file_path.exists():
         return file_path
+    if optional:
+      return None
     raise FileNotFoundError(
       f"Could not locate '{filename}' in {[str(path) for path in candidate_dirs]}"
     )
 
+  df = None
+  dataset_origin = ""
   try:
-    data_path = resolve_path('cleaned_crime_data.csv')
+    data_path = resolve_path('cleaned_crime_data.csv', optional=True)
     boroughs_path = resolve_path('alcaldias.geojson')
     metro_path = resolve_path('alcaldias.geojson')
 
-    df = pd.read_csv(data_path)
+    if data_path:
+      df = pd.read_csv(data_path)
+      dataset_origin = f"'{data_path.name}'"
+    else:
+      db_path = resolve_path('cdmx_insights.db')
+      with duckdb.connect(str(db_path), read_only=True) as con:
+        df = con.execute("SELECT * FROM crimes").fetchdf()
+      dataset_origin = "DuckDB (crimes)"
+
     boroughs_coordinates = str(boroughs_path)
     metro_coordinates = str(metro_path)
-    print(f"Data loaded successfully from '{data_path}'.")
+    print(f"Data loaded successfully from {dataset_origin}.")
+
   except FileNotFoundError as e:
     print(f"Error: {e}")
     df = None

@@ -61,6 +61,12 @@ pip install -r requirements.txt
 
 The rest of the modules (e.g., `data_processing.py`, `mapa.py`) work directly with the DuckDB database and the cached CSV/model artifacts produced above.
 
+### Deploy-friendly artifacts
+
+- `load_data.py` y `train_model.py` ahora generan copias comprimidas (`artifacts/*.gz`) de los archivos que superan el límite de 100 MB de GitHub (por ejemplo, `cdmx_insights.db` y `crime_forecaster.pkl`).  
+- `bootstrap_assets.ensure_assets()` se ejecuta al iniciar `app.py`; si detecta que faltan los archivos reales, los restaura automáticamente desde dichos `.gz`.  
+- Cuando regeneres la base o los modelos, asegúrate de **commitear tanto los archivos nuevos** (si pesan <100 MB) **como las versiones comprimidas** para que Streamlit Cloud pueda reconstruirlos.
+
 ## Running the Streamlit dashboard
 
 1. Activate your virtual environment (`source .venv/bin/activate`).

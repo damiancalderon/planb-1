@@ -3,6 +3,9 @@ import pandas as pd
 import numpy as np
 import joblib
 import statsmodels.api as sm
+import gzip
+import shutil
+from pathlib import Path
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
@@ -17,6 +20,20 @@ import warnings
 warnings.filterwarnings('ignore')
 
 DB_FILE = "cdmx_insights.db"
+ARTIFACTS_DIR = Path(__file__).resolve().parent / "artifacts"
+
+
+def snapshot_artifact(source_path: Path, archive_name: str) -> None:
+    """
+    Compress artefacts so they can be committed (<100 MB) and restored on deploy.
+    """
+    if not source_path.exists():
+        return
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    archive_path = ARTIFACTS_DIR / archive_name
+    with open(source_path, "rb") as src, gzip.open(archive_path, "wb") as dst:
+        shutil.copyfileobj(src, dst)
+    print(f"Copia comprimida actualizada en '{archive_path.name}'.")
 
 def load_data_for_classification():
     print("Cargando datos para clasificación (v3)...")
@@ -204,6 +221,7 @@ def train_timeseries_model():
     model_fit = model.fit(disp=False)
     model_fit.save('crime_forecaster.pkl')
     print("Entrenamiento SARIMA completado.")
+    snapshot_artifact(Path('crime_forecaster.pkl'), 'crime_forecaster.pkl.gz')
 
 if __name__ == "__main__":
     print("===== INICIANDO ENTRENAMIENTO DE MODELOS (v3 con Interacciones) =====")

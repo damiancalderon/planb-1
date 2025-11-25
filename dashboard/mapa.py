@@ -203,7 +203,8 @@ def load_and_clean_raw_data():
     try:
         df_raw, _, _ = dp.load_data()
         if df_raw is None:
-            st.error("Error: No se pudieron cargar los datos raw (carpetasFGJ_acumulado_2025_01.csv).")
+            st.error("Error: No se pudieron cargar los datos limpios. "
+                     "Verifica que exista 'cleaned_crime_data.csv' o el DuckDB 'cdmx_insights.db'.")
             return pd.DataFrame()
 
         df_clean = dp.clean_data(df_raw.copy())
@@ -217,7 +218,7 @@ def load_and_clean_raw_data():
         return df_clean
 
     except FileNotFoundError:
-        st.error("Error: No se encontró el archivo de datos raw (data/carpetasFGJ_acumulado_2025_01.csv).")
+        st.error("Error: No se encontró ninguna fuente de datos (CSV o DuckDB).")
         return pd.DataFrame()
     except Exception as e:
         st.error(f"Ocurrió un error durante la carga y limpieza de datos: {e}")

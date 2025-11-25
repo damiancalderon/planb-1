@@ -1,9 +1,13 @@
 import streamlit as st
+from bootstrap_assets import ensure_assets
 # Importa tus módulos de renderizado, se asume que existen:
 # En app.py
 from modules import ui_home, ui_analysis, ui_info, ui_ourteam, ui_alerts, ui_map  # Importar desde el paquete modules
 
 # Si estos módulos no existen, el código fallará al intentar llamarlos.
+
+# Garantiza que los artefactos críticos existan incluso en despliegues limpios.
+ensure_assets()
 
 # --- Configuración de página (debe ir antes de cualquier render) ---
 st.set_page_config(
