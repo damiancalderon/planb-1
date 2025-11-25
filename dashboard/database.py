@@ -1,9 +1,11 @@
-import streamlit as st
 import duckdb
 import pandas as pd
+import streamlit as st
+
+from paths import DUCKDB_FILE
 
 # Nombre del archivo de la base de datos
-DB_FILE = "cdmx_insights.db"
+DB_FILE = DUCKDB_FILE
 
 @st.cache_resource
 def get_db_connection():
@@ -11,7 +13,7 @@ def get_db_connection():
     Crea y cachea una conexión a la base de datos DuckDB.
     """
     try:
-        con = duckdb.connect(DB_FILE, read_only=True)
+        con = duckdb.connect(str(DB_FILE), read_only=True)
         return con
     except duckdb.Error as e:
         st.error(f"Error al conectar con la base de datos: {e}")

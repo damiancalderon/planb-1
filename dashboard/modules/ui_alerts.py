@@ -1,16 +1,23 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import joblib
-import database  
-import requests  
-import json      
+import json
 from datetime import datetime, timedelta
-from geopy.geocoders import Nominatim
-from geopy.extra.rate_limiter import RateLimiter
-import pydeck as pdk 
+
+import database
+import joblib
+import numpy as np
+import pandas as pd
+import pydeck as pdk
+import requests
+import streamlit as st
 import unidecode
-from pathlib import Path 
+from geopy.extra.rate_limiter import RateLimiter
+from geopy.geocoders import Nominatim
+
+from paths import (
+    ALCALDIAS_GEOJSON_PATH,
+    CLUSTER_INFO_PATH,
+    MODEL_KMEANS_PATH,
+    MODEL_XGB_PATH,
+)
 from .location_utils import enrich_cluster_locations
 
 # --- Configuración de página (debe estar fuera de render) ---
@@ -23,20 +30,20 @@ N8N_WEBHOOK_URL = "https://n8n.tektititc.org/webhook/90408216-1fba-4806-b062-2ab
 @st.cache_resource
 def load_models_and_data():
     try:
-        model = joblib.load('violence_xgb_optimizado_v3.joblib')
+        model = joblib.load(MODEL_XGB_PATH)
     except FileNotFoundError:
         st.error("Error: 'violence_xgb_optimizado_v3.joblib' no encontrado.")
         st.warning("Asegúrate de haber ejecutado la última versión de 'train_model.py'.")
         model = None
     
     try:
-        kmeans = joblib.load('kmeans_zonas.joblib')
+        kmeans = joblib.load(MODEL_KMEANS_PATH)
     except FileNotFoundError:
         st.error("Error: 'kmeans_zonas.joblib' no encontrado.")
         kmeans = None
     
     try:
-        df_clusters = pd.read_csv('cluster_info.csv')
+        df_clusters = pd.read_csv(CLUSTER_INFO_PATH)
         df_clusters = enrich_cluster_locations(df_clusters)
     except FileNotFoundError:
         st.error("Error: 'cluster_info.csv' no encontrado.")
@@ -45,9 +52,8 @@ def load_models_and_data():
     df_alcaldias = database.get_all_alcaldias()
     df_categorias = database.get_all_crime_categories()
     
-    GEOJSON_PATH = Path(__file__).parent.parent / "alcaldias.geojson"
     try:
-        with open(GEOJSON_PATH, 'r', encoding='utf-8') as f:
+        with open(ALCALDIAS_GEOJSON_PATH, 'r', encoding='utf-8') as f:
             geojson_data = json.load(f)
     except FileNotFoundError:
         st.error(f"Error: No se encontró 'alcaldias.geojson'.")

@@ -62,6 +62,7 @@ target/
 # Database
 *.db
 *.rdb
+!dashboard/cdmx_insights.db
 
 # Pycharm
 .idea
@@ -92,14 +93,13 @@ target/
 # Exclude trained models
 /models/
 
-# exclude data from source control by default
-# /data/dashboard/carpetasFGJ_acumulado_2025_01.csv
+# exclude large local data artifacts; compressed copies live in dashboard/artifacts/
 dashboard/cleaned_crime_data.csv
-<<<<<<< HEAD
-=======
-carpetasFGJ_*.csv
-carpetasFGJ_*.csv
-dashboard/*.csv
-dashboard/*.csv
-carpetasFGJ_*.csv
->>>>>>> 57695c1260b2c477ebf3d336435ea8dea6a39431
+dashboard/carpetasFGJ_*.csv
+# Allow lightweight runtime artifacts needed at runtime
+!dashboard/violence_rf_optimizado_v3.joblib
+!dashboard/violence_xgb_optimizado_v3.joblib
+!dashboard/kmeans_zonas.joblib
+!dashboard/crime_forecaster.pkl
+!dashboard/cdmx_insights.db
+!dashboard/cluster_info.csv

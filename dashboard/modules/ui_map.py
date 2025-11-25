@@ -1,23 +1,31 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import joblib
 import json
 from datetime import datetime
 from functools import lru_cache
-from typing import Optional, List
-from pathlib import Path
+from typing import List, Optional
+
 import folium
-from streamlit_folium import st_folium
+import joblib
 import mapa
+import numpy as np
+import pandas as pd
+import streamlit as st
+from streamlit_folium import st_folium
 from unidecode import unidecode
+
+from paths import (
+    ALCALDIAS_GEOJSON_PATH,
+    CLUSTER_INFO_PATH,
+    DASHBOARD_DIR,
+    MODEL_KMEANS_PATH,
+    MODEL_XGB_PATH,
+)
 from .data import get_all_alcaldias, get_all_crime_categories, run_query
 from .location_utils import enrich_cluster_locations
 
 # =========================
 # RUTAS GLOBALES (ajusta si hace falta)
 # =========================
-BASE_PATH = Path(__file__).parent.parent
+BASE_PATH = DASHBOARD_DIR
 
 ALL_YEARS_OPTION = "Todo el histórico"
 DEFAULT_MAP_YEAR = 2024
@@ -30,32 +38,30 @@ def load_models_and_data():
     """
     Carga todos los modelos (XGB v3, KMeans) y datos (Clusters, GeoJSON) necesarios.
     """
-    base_path = Path(__file__).parent.parent
-
     # Modelo XGB
     try:
-        model = joblib.load(base_path / 'violence_xgb_optimizado_v3.joblib')
+        model = joblib.load(MODEL_XGB_PATH)
     except FileNotFoundError:
         st.error("Error: 'violence_xgb_optimizado_v3.joblib' no encontrado. Asegúrate de que esté en el directorio raíz.")
         model = None
 
     # Modelo KMeans
     try:
-        kmeans = joblib.load(base_path / 'kmeans_zonas.joblib')
+        kmeans = joblib.load(MODEL_KMEANS_PATH)
     except FileNotFoundError:
         st.error("Error: 'kmeans_zonas.joblib' no encontrado. Asegúrate de que esté en el directorio raíz.")
         kmeans = None
 
     # Info de clusters pre-calculados
     try:
-        df_clusters = pd.read_csv(base_path / 'cluster_info.csv')
+        df_clusters = pd.read_csv(CLUSTER_INFO_PATH)
         df_clusters = enrich_cluster_locations(df_clusters)
     except FileNotFoundError:
         st.error("Error: 'cluster_info.csv' no encontrado. Ejecuta 'crear_cluster_info.py' primero.")
         df_clusters = None
 
     # GeoJSON de alcaldías
-    GEOJSON_PATH = base_path / "alcaldias.geojson"
+    GEOJSON_PATH = ALCALDIAS_GEOJSON_PATH
     try:
         with open(GEOJSON_PATH, 'r', encoding='utf-8') as f:
             geojson_data = json.load(f)

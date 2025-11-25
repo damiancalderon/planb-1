@@ -1,11 +1,13 @@
 # modules/ui_analysis.py
-import streamlit as st
-import plotly.graph_objects as go
 import altair as alt
 import database
-import pandas as pd
 import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
 from statsmodels.tsa.statespace.sarimax import SARIMAXResults
+
+from paths import MODEL_FORECAST_PATH
 
 # ✅ Reutilizamos lógica de EDA / tendencias desde ui_info
 from .ui_info import (
@@ -22,7 +24,7 @@ from .ui_info import (
 def load_forecast_model():
     """Carga el modelo SARIMA guardado."""
     try:
-        model = SARIMAXResults.load("crime_forecaster.pkl")
+        model = SARIMAXResults.load(str(MODEL_FORECAST_PATH))
         return model
     except FileNotFoundError:
         st.error(

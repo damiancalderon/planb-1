@@ -5,9 +5,9 @@ import shutil
 from pathlib import Path
 from typing import List
 
+from paths import ARTIFACTS_DIR, DASHBOARD_DIR
 
-BASE_PATH = Path(__file__).resolve().parent
-ARTIFACTS_DIR = BASE_PATH / "artifacts"
+BASE_PATH = DASHBOARD_DIR
 
 REQUIRED_ASSETS = [
     {

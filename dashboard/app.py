@@ -1,13 +1,38 @@
 import streamlit as st
+
 from bootstrap_assets import ensure_assets
+from paths import (
+    CLUSTER_INFO_PATH,
+    DATA_DIR as DATA_DIR_PATH,
+    MODEL_FORECAST_PATH,
+    MODEL_KMEANS_PATH,
+    MODEL_RF_PATH,
+    MODEL_XGB_PATH,
+    REPO_ROOT,
+)
 # Importa tus módulos de renderizado, se asume que existen:
 # En app.py
 from modules import ui_home, ui_analysis, ui_info, ui_ourteam, ui_alerts, ui_map  # Importar desde el paquete modules
 
 # Si estos módulos no existen, el código fallará al intentar llamarlos.
 
+# Constantes de rutas del proyecto
+BASE_DIR = REPO_ROOT
+DATA_DIR = DATA_DIR_PATH
+MODEL_RF = MODEL_RF_PATH
+MODEL_XGB = MODEL_XGB_PATH
+MODEL_KMEANS = MODEL_KMEANS_PATH
+MODEL_FORECAST = MODEL_FORECAST_PATH
+MODEL_CLUSTER_INFO = CLUSTER_INFO_PATH
+RUNTIME_ARTIFACTS = [MODEL_RF, MODEL_XGB, MODEL_KMEANS, MODEL_FORECAST, MODEL_CLUSTER_INFO]
+
 # Garantiza que los artefactos críticos existan incluso en despliegues limpios.
 ensure_assets()
+
+missing_artifacts = [artifact for artifact in RUNTIME_ARTIFACTS if not artifact.exists()]
+if missing_artifacts:
+    relative_missing = ", ".join(str(path.relative_to(BASE_DIR)) for path in missing_artifacts)
+    st.warning(f"Faltan artefactos requeridos para la app: {relative_missing}")
 
 # --- Configuración de página (debe ir antes de cualquier render) ---
 st.set_page_config(
